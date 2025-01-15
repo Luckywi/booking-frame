@@ -1,0 +1,249 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+ :root {
+   --background: 0 0% 100%;
+   --foreground: 0 0% 3.9%;
+   --card: 0 0% 100%;
+   --card-foreground: 0 0% 3.9%;
+   --popover: 0 0% 100%;
+   --popover-foreground: 0 0% 3.9%;
+   --primary: 0 0% 9%;
+   --primary-foreground: 0 0% 98%;
+   --secondary: 0 0% 96.1%;
+   --secondary-foreground: 0 0% 9%;
+   --muted: 0 0% 96.1%;
+   --muted-foreground: 0 0% 45.1%;
+   --accent: 0 0% 96.1%;
+   --accent-foreground: 0 0% 9%;
+   --destructive: 0 84.2% 60.2%;
+   --destructive-foreground: 0 0% 98%;
+   --border: 0 0% 89.8%;
+   --input: 0 0% 89.8%;
+   --ring: 0 0% 3.9%;
+   --radius: 0.5rem;
+ }
+
+ .dark {
+   --background: 0 0% 3.9%;
+   --foreground: 0 0% 98%;
+   --card: 0 0% 3.9%;
+   --card-foreground: 0 0% 98%;
+   --popover: 0 0% 3.9%;
+   --popover-foreground: 0 0% 98%;
+   --primary: 0 0% 98%;
+   --primary-foreground: 0 0% 9%;
+   --secondary: 0 0% 14.9%;
+   --secondary-foreground: 0 0% 98%;
+   --muted: 0 0% 14.9%;
+   --muted-foreground: 0 0% 63.9%;
+   --accent: 0 0% 14.9%;
+   --accent-foreground: 0 0% 98%;
+   --destructive: 0 62.8% 30.6%;
+   --destructive-foreground: 0 0% 98%;
+   --border: 0 0% 14.9%;
+   --input: 0 0% 14.9%;
+   --ring: 0 0% 83.1%;
+ }
+}
+
+@layer components {
+ /* Layout Général */
+ .booking-container {
+   @apply w-full max-w-3xl mx-auto;
+ }
+
+ /* Navigation par étapes */
+ .steps-nav {
+   @apply flex justify-between px-6 py-4 border-b;
+ }
+
+ .step-item {
+   @apply flex flex-col items-center gap-2;
+ }
+
+ .step-number {
+   @apply w-8 h-8 rounded flex items-center justify-center text-sm transition-all duration-300;
+ }
+
+ .step-number-active {
+   @apply border bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))];
+ }
+
+ .step-number-inactive {
+   @apply bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))];
+ }
+
+ .step-label {
+   @apply text-xs transition-colors duration-200;
+ }
+
+ .step-label-active {
+   @apply text-[hsl(var(--foreground))];
+ }
+
+ .step-label-inactive {
+   @apply text-[hsl(var(--muted-foreground))];
+ }
+
+ /* En-têtes de section */
+ .section-header {
+   @apply flex justify-between items-center;
+ }
+
+ .section-title {
+   @apply text-xl font-medium text-[hsl(var(--foreground))];
+ }
+
+ .section-description {
+   @apply text-sm text-[hsl(var(--muted-foreground))];
+ }
+
+ /* Cartes de service */
+ .service-list {
+   @apply space-y-8;
+ }
+
+ .service-category {
+   @apply space-y-4;
+ }
+
+ .service-category-title {
+   @apply text-base font-medium text-[hsl(var(--foreground))];
+ }
+
+ .service-card {
+   @apply p-4 rounded-md border cursor-pointer transition-all duration-200;
+ }
+
+ .service-card-selected {
+   @apply border-[hsl(var(--foreground))] bg-[hsl(var(--accent))];
+ }
+
+ .service-card-content {
+   @apply flex justify-between items-start gap-4 border-[hsl(var(--primary))];
+ }
+
+ /* Sélection date/staff */
+ .date-selector {
+   @apply space-y-6;
+ }
+
+ .staff-selector {
+   @apply border bg-[hsl(var(--accent))] p-4 rounded-md space-y-4;
+ }
+
+ .calendar-container {
+   @apply border rounded-md;
+ }
+
+ .calendar-header {
+   @apply grid grid-cols-7 border-b;
+ }
+
+ .calendar-day {
+   @apply p-3 text-center border-r last:border-r-0;
+ }
+
+ .calendar-navigation {
+   @apply flex justify-between p-2 border-b bg-[hsl(var(--muted))];
+ }
+
+ .nav-button {
+   @apply p-1.5 rounded-md hover:bg-[hsl(var(--accent))] transition-colors;
+ }
+
+ .time-slots-grid {
+   @apply grid grid-cols-7;
+ }
+
+ .time-slot-column {
+   @apply min-h-[400px] p-2 border-r last:border-r-0;
+ }
+
+ .time-slot {
+   @apply w-full py-2 px-3 mb-2 text-sm rounded-md transition-all duration-200 font-medium;
+ }
+
+ .time-slot-available {
+   @apply hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--primary-foreground))] bg-[hsl(var(--background))] border;
+ }
+
+ .time-slot-unavailable {
+   @apply text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] cursor-not-allowed;
+ }
+
+ /* Formulaire client */
+ .client-form {
+   @apply space-y-6;
+ }
+
+ .booking-summary {
+   @apply border bg-[hsl(var(--accent))] p-4 rounded-lg space-y-2;
+ }
+
+ .summary-title {
+   @apply font-medium text-[hsl(var(--foreground))];
+ }
+
+ .summary-content {
+   @apply text-sm text-[hsl(var(--muted-foreground))];
+ }
+
+ .form-group {
+   @apply space-y-4;
+ }
+
+ .form-row {
+   @apply grid grid-cols-2 gap-4;
+ }
+
+ .form-field {
+   @apply space-y-1;
+ }
+
+ .form-label {
+   @apply block text-sm font-medium text-[hsl(var(--foreground))];
+ }
+
+ .form-actions {
+   @apply flex justify-between pt-4;
+ }
+
+ /* Boutons de navigation */
+ .back-button {
+   @apply text-sm text-[hsl(var(--foreground))] flex items-center gap-1;
+ }
+
+ /* États et utilitaires */
+ .loading-state {
+   @apply text-center text-[hsl(var(--muted-foreground))];
+ }
+
+ .error-state {
+   @apply text-center text-[hsl(var(--destructive))];
+ }
+
+ .empty-state {
+   @apply text-center text-[hsl(var(--muted-foreground))] p-4;
+ }
+
+   /* Classes pour les textes des services */
+   .service-title {
+    @apply font-medium text-base text-[hsl(var(--foreground))];
+  }
+
+  .service-description {
+    @apply text-sm text-[hsl(var(--muted-foreground))];
+  }
+
+  .service-price {
+    @apply font-medium text-base text-[hsl(var(--foreground))];
+  }
+
+  .service-duration {
+    @apply text-sm text-[hsl(var(--muted-foreground))];
+  }
+}
