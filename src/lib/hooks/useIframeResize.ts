@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react';
 
-export const useIframeResize = () => {
+export const useIframeResize = (currentStep: number) => {
   const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const previousHeightRef = useRef<number>(0);
 
@@ -26,10 +26,11 @@ export const useIframeResize = () => {
       previousHeightRef.current = maxHeight;
       window.parent.postMessage({ 
         type: 'resize',
-        height: maxHeight
+        height: maxHeight,
+        step: currentStep
       }, '*');
     }
-  }, []); // Ajout des dépendances vides ici
+  }, [currentStep]);
 
   const debouncedResize = useCallback(() => {
     if (resizeTimeoutRef.current) {
@@ -75,6 +76,18 @@ export const useIframeResize = () => {
       document.removeEventListener('load', calculateHeight, true);
     };
   }, [calculateHeight, debouncedResize]);
+
+  // Ajout d'un listener pour les messages de recalcul
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'recalculateHeight') {
+        calculateHeight();
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [calculateHeight]);
 
   return calculateHeight;
 };

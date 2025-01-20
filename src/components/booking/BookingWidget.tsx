@@ -23,7 +23,9 @@ interface ServiceCategory {
 }
 
 export default function BookingWidget({ businessId }: BookingWidgetProps) {
-  const calculateHeight = useIframeResize();
+  const [step, _setStep] = useState(1);  // Déplacer cette ligne en premier
+  const calculateHeight = useIframeResize(step); // Maintenant step est défini avant d'être utilisé
+  
   const [services, setServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,16 +35,17 @@ export default function BookingWidget({ businessId }: BookingWidgetProps) {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const router = useRouter();
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
-  const [step, _setStep] = useState(1);
 
-  // Wrapper amélioré pour setStep
   const setStep = (newStep: number) => {
     _setStep(newStep);
-    // Notifier le parent du changement de page
-    window.parent.postMessage({ type: 'pageChange' }, '*');
-    // Recalculer la hauteur après que le DOM soit mis à jour
-    setTimeout(calculateHeight, 0);
+    window.parent.postMessage({ 
+        type: 'pageChange',
+        step: newStep 
+    }, '*');
+    setTimeout(() => calculateHeight(), 0);
   };
+
+
 
   const formatDuration = (duration: { hours: number; minutes: number }) => {
     const parts = [];
