@@ -22,7 +22,6 @@ interface ServiceCategory {
 }
 
 export default function BookingWidget({ businessId }: BookingWidgetProps) {
-  const [step, setStep] = useState(1);
   const [services, setServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,15 +31,13 @@ export default function BookingWidget({ businessId }: BookingWidgetProps) {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const router = useRouter();
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
+  const [step, _setStep] = useState(1);
+  const setStep = (newStep: number) => {
+    _setStep(newStep);
+    window.parent.postMessage({ type: 'pageChange' }, '*');
+  };
 
-
-  useEffect(() => {
-    window.parent.postMessage({ 
-        type: 'pageChange' 
-    }, '*');
-  }, [step]);
-
-
+  
   const formatDuration = (duration: { hours: number; minutes: number }) => {
     const parts = [];
     if (duration.hours > 0) {
