@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -23,8 +24,8 @@ interface ServiceCategory {
 }
 
 export default function BookingWidget({ businessId }: BookingWidgetProps) {
-  const [step, _setStep] = useState(1);  // Déplacer cette ligne en premier
-  const calculateHeight = useIframeResize(step); // Maintenant step est défini avant d'être utilisé
+  const [step, setStep] = useState(1);
+  const calculateHeight = useIframeResize();
   
   const [services, setServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -36,16 +37,14 @@ export default function BookingWidget({ businessId }: BookingWidgetProps) {
   const router = useRouter();
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
 
-  const setStep = (newStep: number) => {
-    _setStep(newStep);
+  const handleStepChange = (newStep: number) => {
+    setStep(newStep);
     window.parent.postMessage({ 
-        type: 'pageChange',
-        step: newStep 
+      type: 'pageChange',
+      step: newStep 
     }, '*');
-    setTimeout(() => calculateHeight(), 0);
+    setTimeout(calculateHeight, 0);
   };
-
-
 
   const formatDuration = (duration: { hours: number; minutes: number }) => {
     const parts = [];
@@ -72,8 +71,9 @@ export default function BookingWidget({ businessId }: BookingWidgetProps) {
 
   const handleServiceSelect = (service: Service) => {
     setSelectedService(service);
-    setStep(2);
+    handleStepChange(2);
   };
+
 
   useEffect(() => {
     const fetchBusinessData = async () => {
@@ -213,7 +213,7 @@ export default function BookingWidget({ businessId }: BookingWidgetProps) {
             <div className="section-header">
               <h2 className="section-title">Choisir la date et l'heure</h2>
               <button 
-                onClick={() => setStep(1)}
+                onClick={() => handleStepChange(1)}
                 className="back-button"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -232,7 +232,7 @@ export default function BookingWidget({ businessId }: BookingWidgetProps) {
                   ? staffList.find(s => s.id === staffId) || null 
                   : null;
                 setSelectedStaffMember(staffMember);
-                setStep(3);
+                handleStepChange(3);
               }}
             />
           </div>
@@ -243,7 +243,7 @@ export default function BookingWidget({ businessId }: BookingWidgetProps) {
             <div className="section-header">
               <h2 className="section-title">Vos informations</h2>
               <button 
-                onClick={() => setStep(2)}
+                onClick={() => handleStepChange(2)}
                 className="back-button"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -283,7 +283,7 @@ export default function BookingWidget({ businessId }: BookingWidgetProps) {
                   console.error('Erreur lors de la création du rendez-vous:', error);
                 }
               }}
-              onBack={() => setStep(2)}
+              onBack={() => handleStepChange(2)}
             />
           </div>
         )}
