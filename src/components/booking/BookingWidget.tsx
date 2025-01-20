@@ -55,6 +55,18 @@ export default function BookingWidget({ businessId }: BookingWidgetProps) {
     return parts.join(' ');
   };
 
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data.type === 'recalculateHeight') {
+        calculateHeight();
+      }
+    };
+  
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [calculateHeight]);
+  
+
   const handleServiceSelect = (service: Service) => {
     setSelectedService(service);
     setStep(2);
