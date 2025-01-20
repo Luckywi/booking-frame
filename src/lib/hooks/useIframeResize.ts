@@ -7,44 +7,79 @@ export const useIframeResize = () => {
   const previousHeightRef = useRef<number>(0);
   const isResizingRef = useRef(false);
   const defaultHeight = 450;
-  const bottomPadding = 80; // Marge de sécurité en bas
+  const bottomPadding = 80;
 
   const calculateHeight = useCallback(() => {
     if (isResizingRef.current) return;
 
-    // Liste des éléments à observer pour la hauteur
-    const container = document.querySelector('.booking-container');
-    const currentContent = document.querySelector('.service-list, .date-selector, .client-form');
+    // Fonction pour calculer la hauteur totale d'un élément avec tous ses enfants
+    const getTotalHeight = (element: Element): number => {
+      const styles = window.getComputedStyle(element);
+      const marginTop = parseFloat(styles.marginTop) || 0;
+      const marginBottom = parseFloat(styles.marginBottom) || 0;
+      const paddingTop = parseFloat(styles.paddingTop) || 0;
+      const paddingBottom = parseFloat(styles.paddingBottom) || 0;
+      const borderTop = parseFloat(styles.borderTopWidth) || 0;
+      const borderBottom = parseFloat(styles.borderBottomWidth) || 0;
 
-    if (!container || !currentContent) {
-      window.parent.postMessage({
-        type: 'resize',
-        height: defaultHeight + bottomPadding
-      }, '*');
-      return;
+      let maxChildBottom = 0;
+      Array.from(element.children).forEach(child => {
+        const childRect = child.getBoundingClientRect();
+        const childStyles = window.getComputedStyle(child);
+        const childMarginBottom = parseFloat(childStyles.marginBottom) || 0;
+        const childBottom = childRect.bottom + childMarginBottom;
+        maxChildBottom = Math.max(maxChildBottom, childBottom);
+      });
+
+      const elementRect = element.getBoundingClientRect();
+      const totalHeight = Math.max(
+        elementRect.height + marginTop + marginBottom + paddingTop + paddingBottom + borderTop + borderBottom,
+        maxChildBottom - elementRect.top + marginBottom + paddingBottom + borderBottom
+      );
+
+      return totalHeight;
+    };
+
+    // Calculer la hauteur pour chaque type de contenu
+    const container = document.querySelector('.booking-container');
+    const serviceList = document.querySelector('.service-list');
+    const dateSelector = document.querySelector('.date-selector');
+    const clientForm = document.querySelector('.client-form');
+    
+    if (!container) {
+      return defaultHeight + bottomPadding;
     }
 
-    // Calculer la hauteur réelle du contenu actuel
-    const contentRect = currentContent.getBoundingClientRect();
-    const contentStyles = window.getComputedStyle(currentContent);
-    const contentMarginTop = parseFloat(contentStyles.marginTop) || 0;
-    const contentMarginBottom = parseFloat(contentStyles.marginBottom) || 0;
-    const contentFullHeight = Math.ceil(contentRect.height + contentMarginTop + contentMarginBottom);
+    let contentHeight = 0;
 
-    // Ajouter la marge de sécurité à la hauteur minimale et à la hauteur calculée
-    const newHeight = Math.max(contentFullHeight, defaultHeight) + bottomPadding;
+    // Calculer la hauteur du contenu actif
+    if (serviceList && serviceList.getClientRects().length > 0) {
+      contentHeight = getTotalHeight(serviceList);
+    } else if (dateSelector && dateSelector.getClientRects().length > 0) {
+      contentHeight = getTotalHeight(dateSelector);
+    } else if (clientForm && clientForm.getClientRects().length > 0) {
+      contentHeight = getTotalHeight(clientForm);
+    }
 
-    if (newHeight !== previousHeightRef.current) {
+    // Ajouter la hauteur de la navigation et autres éléments fixes
+    const navHeight = document.querySelector('.steps-nav')?.getBoundingClientRect().height || 0;
+    const containerPadding = 32; // 2 * 16px (p-4)
+
+    // Calculer la hauteur finale
+    const totalHeight = Math.max(
+      contentHeight + navHeight + containerPadding + bottomPadding,
+      defaultHeight + bottomPadding
+    );
+
+    if (totalHeight !== previousHeightRef.current) {
       isResizingRef.current = true;
-      previousHeightRef.current = newHeight;
+      previousHeightRef.current = totalHeight;
 
-      // Envoyer la nouvelle hauteur au parent
       window.parent.postMessage({
         type: 'resize',
-        height: newHeight
+        height: totalHeight
       }, '*');
 
-      // Éviter les recalculs trop fréquents
       setTimeout(() => {
         isResizingRef.current = false;
       }, 50);
@@ -52,24 +87,23 @@ export const useIframeResize = () => {
   }, []);
 
   useEffect(() => {
-    // Configuration de l'observateur de redimensionnement
     resizeObserverRef.current = new ResizeObserver(() => {
       requestAnimationFrame(calculateHeight);
     });
 
-    // Observer le conteneur principal et le contenu actif
     const elementsToObserve = [
-      document.querySelector('.booking-container'),
-      document.querySelector('.service-list'),
-      document.querySelector('.date-selector'),
-      document.querySelector('.client-form')
-    ].filter(Boolean) as Element[];
+      '.booking-container',
+      '.service-list',
+      '.date-selector',
+      '.client-form',
+      '.steps-nav'
+    ].map(selector => document.querySelector(selector))
+     .filter(Boolean) as Element[];
 
     elementsToObserve.forEach(element => {
       resizeObserverRef.current?.observe(element);
     });
 
-    // Observer les mutations du DOM
     const mutationObserver = new MutationObserver(() => {
       requestAnimationFrame(calculateHeight);
     });
@@ -80,67 +114,26 @@ export const useIframeResize = () => {
       attributes: true
     });
 
-    // Écouter les messages du parent
+    // Gestionnaire de messages
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'requestHeight') {
         calculateHeight();
       }
     };
 
-    // Écouter les événements nécessaires
     window.addEventListener('message', handleMessage);
     window.addEventListener('resize', calculateHeight);
     document.addEventListener('DOMContentLoaded', calculateHeight);
 
-    // Calcul initial après un court délai pour s'assurer que tout est chargé
+    // Calcul initial
     setTimeout(calculateHeight, 100);
 
-    // Nettoyage
     return () => {
       resizeObserverRef.current?.disconnect();
       mutationObserver.disconnect();
       window.removeEventListener('message', handleMessage);
       window.removeEventListener('resize', calculateHeight);
       document.removeEventListener('DOMContentLoaded', calculateHeight);
-    };
-  }, [calculateHeight]);
-
-  // Effet supplémentaire pour écouter les transitions CSS
-  useEffect(() => {
-    const handleTransitionEnd = () => {
-      requestAnimationFrame(calculateHeight);
-    };
-
-    const transitionElements = [
-      document.querySelector('.booking-container'),
-      document.querySelector('.service-list'),
-      document.querySelector('.date-selector'),
-      document.querySelector('.client-form')
-    ].filter(Boolean) as Element[];
-
-    transitionElements.forEach(element => {
-      element.addEventListener('transitionend', handleTransitionEnd);
-    });
-
-    return () => {
-      transitionElements.forEach(element => {
-        element.removeEventListener('transitionend', handleTransitionEnd);
-      });
-    };
-  }, [calculateHeight]);
-
-  // Effet pour écouter les changements de route/navigation
-  useEffect(() => {
-    const handleRouteChange = () => {
-      // Réinitialiser la hauteur
-      previousHeightRef.current = 0;
-      setTimeout(calculateHeight, 100);
-    };
-
-    window.addEventListener('popstate', handleRouteChange);
-    
-    return () => {
-      window.removeEventListener('popstate', handleRouteChange);
     };
   }, [calculateHeight]);
 
