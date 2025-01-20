@@ -22,6 +22,7 @@ interface ServiceCategory {
 }
 
 export default function BookingWidget({ businessId }: BookingWidgetProps) {
+  // Vos states existants
   const [services, setServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,7 +38,66 @@ export default function BookingWidget({ businessId }: BookingWidgetProps) {
     window.parent.postMessage({ type: 'pageChange' }, '*');
   };
 
+
+  useEffect(() => {
+    const calculatePageHeight = () => {
+      const rootElement = document.documentElement;
+      const height = Math.max(
+        rootElement.scrollHeight,
+        rootElement.offsetHeight,
+        document.body.scrollHeight,
+        document.body.offsetHeight
+      );
+      
+      window.parent.postMessage({ 
+        type: 'resize',
+        height: height
+      }, '*');
+    };
   
+    // L'observer pour les changements automatiques
+    const observer = new ResizeObserver(calculatePageHeight);
+    observer.observe(document.body);
+  
+    // Configuration des déclencheurs supplémentaires
+    const mutationObserver = new MutationObserver(calculatePageHeight);
+    mutationObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true
+    });
+  
+    // Calcul initial
+    calculatePageHeight();
+  
+    // Cleanup
+    return () => {
+      observer.disconnect();
+      mutationObserver.disconnect();
+    };
+  }, []);
+  
+  // Recalculer aussi quand l'étape change
+  useEffect(() => {
+    // Petit délai pour laisser le DOM se mettre à jour
+    const timer = setTimeout(() => {
+      const rootElement = document.documentElement;
+      const height = Math.max(
+        rootElement.scrollHeight,
+        rootElement.offsetHeight,
+        document.body.scrollHeight,
+        document.body.offsetHeight
+      );
+      
+      window.parent.postMessage({ 
+        type: 'resize',
+        height: height
+      }, '*');
+    }, 50);
+  
+    return () => clearTimeout(timer);
+  }, [step]); // Se déclenche à chaque changement d'étape
+
   const formatDuration = (duration: { hours: number; minutes: number }) => {
     const parts = [];
     if (duration.hours > 0) {
