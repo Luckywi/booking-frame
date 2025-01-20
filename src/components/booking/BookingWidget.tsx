@@ -33,6 +33,14 @@ export default function BookingWidget({ businessId }: BookingWidgetProps) {
   const router = useRouter();
   const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
 
+
+  useEffect(() => {
+    window.parent.postMessage({ 
+        type: 'pageChange' 
+    }, '*');
+  }, [step]);
+
+
   const formatDuration = (duration: { hours: number; minutes: number }) => {
     const parts = [];
     if (duration.hours > 0) {
