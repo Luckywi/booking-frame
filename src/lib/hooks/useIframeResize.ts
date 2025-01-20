@@ -7,6 +7,7 @@ export const useIframeResize = () => {
   const previousHeightRef = useRef<number>(0);
   const isResizingRef = useRef(false);
   const defaultHeight = 300;
+  const bottomPadding = 80; // Marge de sécurité en bas
 
   const calculateHeight = useCallback(() => {
     if (isResizingRef.current) return;
@@ -18,7 +19,7 @@ export const useIframeResize = () => {
     if (!container || !currentContent) {
       window.parent.postMessage({
         type: 'resize',
-        height: defaultHeight
+        height: defaultHeight + bottomPadding
       }, '*');
       return;
     }
@@ -30,8 +31,8 @@ export const useIframeResize = () => {
     const contentMarginBottom = parseFloat(contentStyles.marginBottom) || 0;
     const contentFullHeight = Math.ceil(contentRect.height + contentMarginTop + contentMarginBottom);
 
-    // S'assurer que la hauteur ne soit pas inférieure à la hauteur minimale
-    const newHeight = Math.max(contentFullHeight, defaultHeight);
+    // Ajouter la marge de sécurité à la hauteur minimale et à la hauteur calculée
+    const newHeight = Math.max(contentFullHeight, defaultHeight) + bottomPadding;
 
     if (newHeight !== previousHeightRef.current) {
       isResizingRef.current = true;
@@ -91,8 +92,8 @@ export const useIframeResize = () => {
     window.addEventListener('resize', calculateHeight);
     document.addEventListener('DOMContentLoaded', calculateHeight);
 
-    // Calcul initial
-    calculateHeight();
+    // Calcul initial après un court délai pour s'assurer que tout est chargé
+    setTimeout(calculateHeight, 100);
 
     // Nettoyage
     return () => {
@@ -101,6 +102,45 @@ export const useIframeResize = () => {
       window.removeEventListener('message', handleMessage);
       window.removeEventListener('resize', calculateHeight);
       document.removeEventListener('DOMContentLoaded', calculateHeight);
+    };
+  }, [calculateHeight]);
+
+  // Effet supplémentaire pour écouter les transitions CSS
+  useEffect(() => {
+    const handleTransitionEnd = () => {
+      requestAnimationFrame(calculateHeight);
+    };
+
+    const transitionElements = [
+      document.querySelector('.booking-container'),
+      document.querySelector('.service-list'),
+      document.querySelector('.date-selector'),
+      document.querySelector('.client-form')
+    ].filter(Boolean) as Element[];
+
+    transitionElements.forEach(element => {
+      element.addEventListener('transitionend', handleTransitionEnd);
+    });
+
+    return () => {
+      transitionElements.forEach(element => {
+        element.removeEventListener('transitionend', handleTransitionEnd);
+      });
+    };
+  }, [calculateHeight]);
+
+  // Effet pour écouter les changements de route/navigation
+  useEffect(() => {
+    const handleRouteChange = () => {
+      // Réinitialiser la hauteur
+      previousHeightRef.current = 0;
+      setTimeout(calculateHeight, 100);
+    };
+
+    window.addEventListener('popstate', handleRouteChange);
+    
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
     };
   }, [calculateHeight]);
 
