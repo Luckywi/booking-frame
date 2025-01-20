@@ -6,7 +6,7 @@ export const useIframeResize = () => {
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const previousHeightRef = useRef<number>(0);
   const isResizingRef = useRef(false);
-  const defaultHeight = 300;
+  const defaultHeight = 450;
   const bottomPadding = 80; // Marge de sécurité en bas
 
   const calculateHeight = useCallback(() => {
