@@ -1,57 +1,75 @@
+// 1. D'abord, créons un hook personnalisé amélioré (src/lib/hooks/useIframeResize.ts)
 import { useEffect, useCallback, useRef } from 'react';
 
-export const useIframeResize = (currentStep: number) => {
-  const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+export const useIframeResize = () => {
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const previousHeightRef = useRef<number>(0);
+  const isResizingRef = useRef(false);
+
+  const sendResizeMessage = useCallback((height: number) => {
+    if (height !== previousHeightRef.current && !isResizingRef.current) {
+      isResizingRef.current = true;
+      previousHeightRef.current = height;
+      window.parent.postMessage({ type: 'iframeResize', height }, '*');
+      
+      // Réinitialiser le verrou après un court délai
+      setTimeout(() => {
+        isResizingRef.current = false;
+      }, 100);
+    }
+  }, []);
 
   const calculateHeight = useCallback(() => {
-    const rootElement = document.documentElement;
-    const bodyElement = document.body;
-    
-    // Get all possible height measurements
-    const heights = [
-      rootElement.scrollHeight,
-      rootElement.offsetHeight,
-      bodyElement.scrollHeight,
-      bodyElement.offsetHeight,
-      // Get heights of all direct children of body
-      ...Array.from(bodyElement.children).map(el => el.scrollHeight),
+    // Obtenir tous les éléments qui peuvent affecter la hauteur
+    const elements = [
+      document.documentElement,
+      document.body,
+      ...Array.from(document.querySelectorAll('main, .booking-container, .client-form, .date-selector'))
     ];
 
-    // Filter out 0 and get the maximum height
-    const maxHeight = Math.max(...heights.filter(h => h > 0));
-    
-    // Only update if height has changed
-    if (maxHeight !== previousHeightRef.current) {
-      previousHeightRef.current = maxHeight;
-      window.parent.postMessage({ 
-        type: 'resize',
-        height: maxHeight,
-        step: currentStep
-      }, '*');
-    }
-  }, [currentStep]);
+    // Calculer la hauteur maximale
+    const maxHeight = Math.max(
+      ...elements.map(el => {
+        if (!el) return 0;
+        const styles = window.getComputedStyle(el);
+        const margin = parseFloat(styles.marginTop) + parseFloat(styles.marginBottom);
+        return Math.ceil(el.getBoundingClientRect().height + margin);
+      })
+    );
 
-  const debouncedResize = useCallback(() => {
-    if (resizeTimeoutRef.current) {
-      clearTimeout(resizeTimeoutRef.current);
+    if (maxHeight > 0) {
+      sendResizeMessage(maxHeight);
     }
-    
-    resizeTimeoutRef.current = setTimeout(() => {
-      calculateHeight();
-    }, 50);
-  }, [calculateHeight]);
+  }, [sendResizeMessage]);
 
   useEffect(() => {
-    // Initial calculation
+    // Configuration initiale
     calculateHeight();
 
-    // Set up ResizeObserver
-    const resizeObserver = new ResizeObserver(debouncedResize);
-    resizeObserver.observe(document.body);
+    // Observer les changements de taille
+    if (!resizeObserverRef.current) {
+      resizeObserverRef.current = new ResizeObserver(() => {
+        requestAnimationFrame(calculateHeight);
+      });
+    }
 
-    // Set up MutationObserver for DOM changes
-    const mutationObserver = new MutationObserver(debouncedResize);
+    // Observer le body et les éléments importants
+    const elementsToObserve = [
+      document.body,
+      document.querySelector('.booking-container'),
+      document.querySelector('.client-form'),
+      document.querySelector('.date-selector')
+    ].filter(Boolean);
+
+    elementsToObserve.forEach(element => {
+      resizeObserverRef.current?.observe(element as Element);
+    });
+
+    // Observer les mutations du DOM
+    const mutationObserver = new MutationObserver(() => {
+      requestAnimationFrame(calculateHeight);
+    });
+
     mutationObserver.observe(document.body, {
       childList: true,
       subtree: true,
@@ -59,37 +77,30 @@ export const useIframeResize = (currentStep: number) => {
       characterData: true
     });
 
-    // Handle back/forward navigation
-    window.addEventListener('popstate', calculateHeight);
+    // Écouter les événements spécifiques
+    const events = ['load', 'resize', 'transitionend', 'animationend'];
+    events.forEach(event => {
+      window.addEventListener(event, calculateHeight);
+    });
 
-    // Handle dynamic content loading
-    document.addEventListener('load', calculateHeight, true);
-
-    // Cleanup
-    return () => {
-      if (resizeTimeoutRef.current) {
-        clearTimeout(resizeTimeoutRef.current);
-      }
-      resizeObserver.disconnect();
-      mutationObserver.disconnect();
-      window.removeEventListener('popstate', calculateHeight);
-      document.removeEventListener('load', calculateHeight, true);
-    };
-  }, [calculateHeight, debouncedResize]);
-
-  // Ajout d'un listener pour les messages de recalcul
-  useEffect(() => {
+    // Écouter les messages du parent
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'recalculateHeight') {
+      if (event.data?.type === 'requestHeight') {
         calculateHeight();
       }
     };
-
     window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+
+    // Nettoyage
+    return () => {
+      resizeObserverRef.current?.disconnect();
+      mutationObserver.disconnect();
+      events.forEach(event => {
+        window.removeEventListener(event, calculateHeight);
+      });
+      window.removeEventListener('message', handleMessage);
+    };
   }, [calculateHeight]);
 
   return calculateHeight;
 };
-
-export default useIframeResize;

@@ -4,21 +4,26 @@ import { useEffect } from "react";
 import { Suspense } from "react";
 import { useSearchParams } from 'next/navigation';
 import { applyTheme } from '@/lib/theme';
-import { useTemplateResize } from '@/lib/hooks/useTemplateResize';
+import { useIframeResize } from '@/lib/hooks/useIframeResize';
 
 function TemplateContent() {
   const searchParams = useSearchParams();
   const businessId = searchParams.get('id');
-  const calculateHeight = useTemplateResize();
+  const calculateHeight = useIframeResize();
 
   useEffect(() => {
     if (businessId) {
       applyTheme(businessId);
     }
+    // Calculer la hauteur après le rendu initial
     const timeoutId = setTimeout(calculateHeight, 0);
-    
     return () => clearTimeout(timeoutId);
   }, [businessId, calculateHeight]);
+
+  // Recalculer la hauteur après chaque changement de route
+  useEffect(() => {
+    calculateHeight();
+  }, [searchParams, calculateHeight]);
 
   return null;
 }
