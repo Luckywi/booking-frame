@@ -5,13 +5,12 @@ import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'fireb
 import { db } from '@/lib/firebase/config';
 import { format, isFuture } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Calendar, Check, AlertCircle, ChevronUp, ChevronDown } from 'lucide-react';
-import { useIframeResize } from '@/lib/hooks/useIframeResize';
-
+import { useConfirmationResize } from '@/lib/hooks/useConfirmationResize';
+import styles from "@/app/confirmation/confirmation.module.css"
 
 
 interface AppointmentService {
@@ -46,195 +45,166 @@ export default function ConfirmationPage() {
   const [error, setError] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [showAllAppointments, setShowAllAppointments] = useState(false);
-  const calculateHeight = useIframeResize();
+  const calculateHeight = useConfirmationResize();
+  const isAppointmentCancellable = appointment?.status === 'confirmed' && isFuture(appointment.start);
 
 
+  const fetchAppointmentHistory = async (clientEmail: string, businessId: string) => {
+    try {
+      const appointmentsQuery = query(
+        collection(db, 'appointments'),
+        where('clientEmail', '==', clientEmail),
+        where('businessId', '==', businessId),
+        where('status', 'in', ['confirmed', 'cancelled'])
+      );
 
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data.type === 'recalculateHeight') {
-        calculateHeight();
-      }
-    };
+      const querySnapshot = await getDocs(appointmentsQuery);
 
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [calculateHeight]);
+      const appointments = await Promise.all(
+        querySnapshot.docs.map(async (appointmentDoc) => {
+          const data = appointmentDoc.data();
+          let serviceDetails;
+          let staffDetails;
 
-  // Deuxième effet pour le changement de page initial
-  useEffect(() => {
-    window.parent.postMessage({ 
-      type: 'pageChange',
-      step: 4 
-    }, '*');
-    setTimeout(calculateHeight, 0);
-  }, []);
+          try {
+            const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
+            serviceDetails = serviceDoc.exists() ? serviceDoc.data() : null;
 
+            const staffDoc = await getDoc(doc(db, 'staff', data.staffId));
+            staffDetails = staffDoc.exists() ? staffDoc.data() : null;
+          } catch (error) {
+            console.error('Erreur lors de la récupération des détails:', error);
+          }
+
+          return {
+            id: appointmentDoc.id,
+            start: data.start.toDate(),
+            end: data.end.toDate(),
+            createdAt: data.createdAt.toDate(),
+            clientEmail: data.clientEmail,
+            clientName: data.clientName,
+            clientPhone: data.clientPhone,
+            status: data.status,
+            service: {
+              title: serviceDetails?.title || 'Service inconnu',
+              price: serviceDetails?.price || 0
+            },
+            staff: {
+              firstName: staffDetails?.firstName || '',
+              lastName: staffDetails?.lastName || ''
+            }
+          };
+        })
+      );
+
+      return appointments
+        .filter(apt => apt.id !== params.id)
+        .sort((a, b) => b.start.getTime() - a.start.getTime());
+
+    } catch (error) {
+      console.error('Erreur lors de la récupération de l\'historique:', error);
+      return [];
+    }
+  };
+
+  const handleCancelAppointment = async () => {
+    if (!appointment || !isFuture(appointment.start)) return;
+
+    try {
+      setCancelLoading(true);
+      await updateDoc(doc(db, 'appointments', appointment.id), {
+        status: 'cancelled'
+      });
+
+      setAppointment(prev => prev ? {...prev, status: 'cancelled'} : null);
+      setTimeout(calculateHeight, 0);
+    } catch (error) {
+      console.error('Erreur lors de l\'annulation:', error);
+      setError('Erreur lors de l\'annulation du rendez-vous');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   const handleToggleAppointments = () => {
     setShowAllAppointments(prev => !prev);
-    setTimeout(calculateHeight, 0); // Même logique simple que dans BookingWidget
+    setTimeout(calculateHeight, 0);
   };
 
-    const fetchAppointmentHistory = async (clientEmail: string, businessId: string) => {
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!params.id) return;
+
       try {
-        // Ajout du filtre businessId dans la requête
-        const appointmentsQuery = query(
-          collection(db, 'appointments'),
-          where('clientEmail', '==', clientEmail),
-          where('businessId', '==', businessId),  // Ajout de cette ligne
-          where('status', 'in', ['confirmed', 'cancelled'])
-        );
-    
-        const querySnapshot = await getDocs(appointmentsQuery);
-    
-        // Ensuite, pour chaque rendez-vous, récupérer les détails
-        const appointments = await Promise.all(
-          querySnapshot.docs.map(async (appointmentDoc) => {
-            const data = appointmentDoc.data();
-            let serviceDetails;
-            let staffDetails;
-    
-            try {
-              // Récupération des détails du service
-              const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
-              serviceDetails = serviceDoc.exists() ? serviceDoc.data() : null;
-    
-              // Récupération des détails du staff
-              const staffDoc = await getDoc(doc(db, 'staff', data.staffId));
-              staffDetails = staffDoc.exists() ? staffDoc.data() : null;
-            } catch (error) {
-              console.error('Erreur lors de la récupération des détails:', error);
-            }
-    
-            // Construction de l'objet rendez-vous
-            return {
-              id: appointmentDoc.id,
-              start: data.start.toDate(),
-              end: data.end.toDate(),
-              createdAt: data.createdAt.toDate(),
-              clientEmail: data.clientEmail,
-              clientName: data.clientName,
-              clientPhone: data.clientPhone,
-              status: data.status,
-              service: {
-                title: serviceDetails?.title || 'Service inconnu',
-                price: serviceDetails?.price || 0
-              },
-              staff: {
-                firstName: staffDetails?.firstName || '',
-                lastName: staffDetails?.lastName || ''
-              }
-            };
-          })
-        );
-    
-        // Filtrer et trier les résultats
-        return appointments
-      .filter(apt => apt.id !== params.id)
-      .sort((a, b) => b.start.getTime() - a.start.getTime());
-
-  } catch (error) {
-    console.error('Erreur lors de la récupération de l\'historique:', error);
-    return [];
-  }
-};
-
-
-    const handleCancelAppointment = async () => {
-        if (!appointment || !isFuture(appointment.start)) return;
-      
-        try {
-          setCancelLoading(true);
-          await updateDoc(doc(db, 'appointments', appointment.id), {
-            status: 'cancelled'
-          });
-      
-          setAppointment(prev => prev ? {...prev, status: 'cancelled'} : null);
-        } catch (error) {
-          console.error('Erreur lors de l\'annulation:', error);
-          setError('Erreur lors de l\'annulation du rendez-vous');
-        } finally {
-          setCancelLoading(false);
+        setLoading(true);
+        const appointmentDoc = await getDoc(doc(db, 'appointments', params.id as string));
+        
+        if (!appointmentDoc.exists()) {
+          setError('Rendez-vous non trouvé');
+          return;
         }
-      };
-  
-      
-      useEffect(() => {
-        const fetchData = async () => {
-            if (!params.id) return;
 
-            try {
-                setLoading(true);
-                const appointmentDoc = await getDoc(doc(db, 'appointments', params.id as string));
-                
-                if (!appointmentDoc.exists()) {
-                    setError('Rendez-vous non trouvé');
-                    return;
-                }
+        const data = appointmentDoc.data();
+        setBusinessId(data.businessId);
 
-                const data = appointmentDoc.data();
-                setBusinessId(data.businessId);
-      
-            // Récupérer les détails du service
-            const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
-            const serviceData = serviceDoc.data();
-      
-            // Récupérer les détails du staff
-            const staffDoc = await getDoc(doc(db, 'staff', data.staffId));
-            const staffData = staffDoc.data();
-      
-            const currentAppointment: Appointment = {
-              id: appointmentDoc.id,
-              start: data.start.toDate(),
-              end: data.end.toDate(),
-              createdAt: data.createdAt.toDate(),
-              clientEmail: data.clientEmail,
-              clientName: data.clientName,
-              clientPhone: data.clientPhone,
-              status: data.status,
-              service: {
-                title: serviceData?.title || 'Service inconnu',
-                price: serviceData?.price || 0
-              },
-              staff: {
-                firstName: staffData?.firstName || '',
-                lastName: staffData?.lastName || ''
-              }
-            };
-            
-            setAppointment(currentAppointment);
+        const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
+        const serviceData = serviceDoc.data();
 
-      // Modification ici pour passer le businessId
-      if (data.clientEmail && data.businessId) {
-        const history = await fetchAppointmentHistory(data.clientEmail, data.businessId);
-        setPastAppointments(history);
+        const staffDoc = await getDoc(doc(db, 'staff', data.staffId));
+        const staffData = staffDoc.data();
+
+        const currentAppointment: Appointment = {
+          id: appointmentDoc.id,
+          start: data.start.toDate(),
+          end: data.end.toDate(),
+          createdAt: data.createdAt.toDate(),
+          clientEmail: data.clientEmail,
+          clientName: data.clientName,
+          clientPhone: data.clientPhone,
+          status: data.status,
+          service: {
+            title: serviceData?.title || 'Service inconnu',
+            price: serviceData?.price || 0
+          },
+          staff: {
+            firstName: staffData?.firstName || '',
+            lastName: staffData?.lastName || ''
+          }
+        };
+        
+        setAppointment(currentAppointment);
+
+        if (data.clientEmail && data.businessId) {
+          const history = await fetchAppointmentHistory(data.clientEmail, data.businessId);
+          setPastAppointments(history);
+        }
+      } catch (error) {
+        console.error('Erreur:', error);
+        setError('Erreur lors du chargement des données');
+      } finally {
+        setLoading(false);
+        setTimeout(calculateHeight, 0);
       }
-    } catch (error) {
-      console.error('Erreur:', error);
-      setError('Erreur lors du chargement des données');
-  } finally {
-      setLoading(false);
+    };
+
+    fetchData();
+  }, [params.id, calculateHeight]);
+
+  if (loading) {
+    return (
+      <div className={styles['confirmation-container']}>
+        <div className={`${styles['confirmation-content']} ${styles['min-height']}`}>
+          <div className={styles['loading-state']}>Chargement...</div>
+        </div>
+      </div>
+    );
   }
-};
 
-
-
-
-fetchData();
-}, [params.id]);
-
-const isAppointmentCancellable = appointment?.status === 'confirmed' && isFuture(appointment.start);
-
-
-return (
-  <div className="booking-container">
-    <Card>
-      {loading ? (
-        <div className="loading-state">Chargement...</div>
-      ) : error || !appointment ? (
-        <div className="error-state">
-          <div className="text-center">
+  if (error || !appointment) {
+    return (
+      <div className={styles['confirmation-container']}>
+        <div className={`${styles['confirmation-content']} ${styles['min-height']}`}>
+          <div className={styles['error-state']}>
             <h1 className="text-xl font-semibold text-red-600 mb-2">
               {error || 'Rendez-vous non trouvé'}
             </h1>
@@ -243,193 +213,171 @@ return (
             </Link>
           </div>
         </div>
-      ) : (
-        <div className="confirmation-content">
-          <div className="text-center">
-            {appointment.status === 'cancelled' ? (
-              <>
-                <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                  <AlertCircle className="w-6 h-6 text-red-600" />
-                </div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Rendez-vous annulé
-                </h1>
-                <p className="mt-2 mb-6 text-gray-600">
-                  Ce rendez-vous a été annulé
-                </p>
-                <Link href={`/?id=${businessId}`} className="block">
-                  <Button className="w-fit py-2 text-base text-white bg-black hover:bg-gray-800">
-                    Prendre un nouveau rendez-vous ?
-                  </Button>
-                </Link>
-              </>
-            ) : (
-              <>
-                <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                  <Check className="w-6 h-6 text-green-600" />
-                </div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Réservation confirmée !
-                </h1>
-                <p className="mt-2 text-gray-600">
-                  Votre rendez-vous a été enregistré avec succès
-                </p>
-              </>
-            )}
-          </div>
-          
-          <div className="bg-gray-50 rounded-lg p-4 space-y-3 mt-6">
-            <h2 className="font-medium">Détails de votre rendez-vous :</h2>
-            <div className="space-y-2 text-sm">
-              <p>
-                <span className="text-gray-500">Service :</span>{' '}
-                <span className="font-medium">{appointment.service.title}</span>
-              </p>
-              <p>
-                <span className="text-gray-500">Date :</span>{' '}
-                <span className="font-medium">
-                  {format(appointment.start, 'EEEE d MMMM yyyy', { locale: fr })}
-                </span>
-              </p>
-              <p>
-                <span className="text-gray-500">Heure :</span>{' '}
-                <span className="font-medium">
-                  {format(appointment.start, 'HH:mm')}
-                </span>
-              </p>
-              <p>
-                <span className="text-gray-500">Avec :</span>{' '}
-                <span className="font-medium">
-                  {appointment.staff.firstName} {appointment.staff.lastName}
-                </span>
-              </p>
-              <p>
-                <span className="text-gray-500">Prix :</span>{' '}
-                <span className="font-medium">{appointment.service.price}€</span>
-              </p>
-              <p>
-                <span className="text-gray-500">Client :</span>{' '}
-                <span className="font-medium">{appointment.clientName}</span>
-              </p>
-              <p>
-                <span className="text-gray-500">Email :</span>{' '}
-                <span className="font-medium">{appointment.clientEmail}</span>
-              </p>
-              <p>
-                <span className="text-gray-500">Téléphone :</span>{' '}
-                <span className="font-medium">{appointment.clientPhone}</span>
-              </p>
-              <p>
-                <span className="text-gray-500">Statut :</span>{' '}
-                <span className={`font-medium ${
-                  appointment.status === 'cancelled' 
-                    ? 'text-red-600'
-                    : 'text-green-600'
-                }`}>
-                  {appointment.status === 'cancelled' ? 'Annulé' : 'Confirmé'}
-                </span>
-              </p>
-            </div>
-          </div>
-          
-          {isAppointmentCancellable && (
-            <div className="flex justify-center mt-6">
-              <Button
-                variant="destructive"
-                onClick={handleCancelAppointment}
-                disabled={cancelLoading}
-              >
-                {cancelLoading ? 'Annulation...' : 'Annuler ce rendez-vous'}
-              </Button>
-            </div>
-          )}
+      </div>
+    );
+  }
 
-          {pastAppointments.length > 0 && (
-            <div className="mt-8">
-              <h2 className="font-medium flex items-center gap-2 mb-4">
-                <Calendar className="w-5 h-5" />
-                Historique de vos rendez-vous
-              </h2>
-              <div className="space-y-4">
-                {(showAllAppointments ? pastAppointments : pastAppointments.slice(0, 2)).map((apt) => (
-                  <div
-                    key={apt.id}
-                    className="p-3 border rounded-lg flex justify-between items-center hover:bg-gray-50"
-                  >
-                    <div>
-                      <p className="font-medium">{apt.service.title}</p>
-                      <p className="text-sm text-gray-500">
-                        {format(apt.start, 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Avec {apt.staff.firstName} {apt.staff.lastName}
-                      </p>
-                    </div>
-                    <div>
-                      <span className={`px-3 py-1 rounded-full text-sm
-                        ${apt.status === 'cancelled' 
-                          ? 'bg-red-100 text-red-800' 
-                          : 'bg-green-100 text-green-800'}`}
-                      >
-                        {apt.status === 'cancelled' ? 'Annulé' : 'Effectué'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-
-                {pastAppointments.length > 2 && (
-                  <button
-                    onClick={handleToggleAppointments}
-                    className="w-full mt-4 flex items-center justify-center gap-2 text-gray-500 hover:text-gray-700 text-sm py-2"
-                  >
-                    <span>{showAllAppointments ? 'Voir moins' : 'Voir plus'}</span>
-                    {showAllAppointments ? (
-                      <ChevronUp className="w-4 h-4" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4" />
-                    )}
-                  </button>
-                )}
+return (
+    <div className={styles['confirmation-container']}>
+      <div className={`${styles['confirmation-content']} ${styles['min-height']}`}>
+        <div className={styles['confirmation-header']}>
+          {appointment.status === 'cancelled' ? (
+            <>
+              <div className={`${styles['confirmation-icon']} ${styles['cancel']}`}>
+                <AlertCircle className="w-6 h-6 text-red-600" />
               </div>
-            </div>
+              <h1 className="text-2xl font-bold text-gray-900">Rendez-vous annulé</h1>
+              <p className="mt-2 mb-6 text-gray-600">Ce rendez-vous a été annulé</p>
+              <Link href={`/?id=${businessId}`}>
+                <Button className="w-fit py-2 text-base text-white bg-black hover:bg-gray-800">
+                  Prendre un nouveau rendez-vous ?
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className={`${styles['confirmation-icon']} ${styles['success']}`}>
+                <Check className="w-6 h-6 text-green-600" />
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900">Réservation confirmée !</h1>
+              <p className="mt-2 text-gray-600">
+                Votre rendez-vous a été enregistré avec succès
+              </p>
+            </>
           )}
+        </div>
 
-          {appointment.status === 'confirmed' && (
-            <div className="text-center text-sm text-gray-500 mt-6">
-              <p>Un email de confirmation a été envoyé à {appointment.clientEmail}</p>
+        <div className={styles['confirmation-details']}>
+          <h2 className={styles['details-title']}>Détails de votre rendez-vous :</h2>
+          <div className={styles['details-grid']}>
+            <div className={styles['details-row']}>
+              <span className={styles['details-label']}>Service :</span>
+              <span className={styles['details-value']}>{appointment.service.title}</span>
             </div>
-          )}
+            <div className={styles['details-row']}>
+              <span className={styles['details-label']}>Date :</span>
+              <span className={styles['details-value']}>
+                {format(appointment.start, 'EEEE d MMMM yyyy', { locale: fr })}
+              </span>
+            </div>
+            <div className={styles['details-row']}>
+              <span className={styles['details-label']}>Heure :</span>
+              <span className={styles['details-value']}>
+                {format(appointment.start, 'HH:mm')}
+              </span>
+            </div>
+            <div className={styles['details-row']}>
+              <span className={styles['details-label']}>Avec :</span>
+              <span className={styles['details-value']}>
+                {appointment.staff.firstName} {appointment.staff.lastName}
+              </span>
+            </div>
+            <div className={styles['details-row']}>
+              <span className={styles['details-label']}>Prix :</span>
+              <span className={styles['details-value']}>{appointment.service.price}€</span>
+            </div>
+            <div className={styles['details-row']}>
+              <span className={styles['details-label']}>Client :</span>
+              <span className={styles['details-value']}>{appointment.clientName}</span>
+            </div>
+            <div className={styles['details-row']}>
+              <span className={styles['details-label']}>Email :</span>
+              <span className={styles['details-value']}>{appointment.clientEmail}</span>
+            </div>
+            <div className={styles['details-row']}>
+              <span className={styles['details-label']}>Téléphone :</span>
+              <span className={styles['details-value']}>{appointment.clientPhone}</span>
+            </div>
+            <div className={styles['details-row']}>
+              <span className={styles['details-label']}>Statut :</span>
+              <span className={`${styles['details-value']} ${
+                appointment.status === 'cancelled' ? 'text-red-600' : 'text-green-600'
+              }`}>
+                {appointment.status === 'cancelled' ? 'Annulé' : 'Confirmé'}
+              </span>
+            </div>
+          </div>
+        </div>
 
-          {appointment.status === 'confirmed' && (
-            <div className="flex justify-center gap-4 mt-6">
+        {isAppointmentCancellable && (
+          <div className={styles['confirmation-footer']}>
+            <Button
+              variant="destructive"
+              onClick={handleCancelAppointment}
+              disabled={cancelLoading}
+            >
+              {cancelLoading ? 'Annulation...' : 'Annuler ce rendez-vous'}
+            </Button>
+          </div>
+        )}
+
+        {pastAppointments.length > 0 && (
+          <div className={styles['confirmation-history']}>
+            <h2 className={styles['history-title']}>
+              <Calendar className="w-5 h-5" />
+              Historique de vos rendez-vous
+            </h2>
+            <div className="space-y-4">
+              {(showAllAppointments ? pastAppointments : pastAppointments.slice(0, 2)).map((apt) => (
+                <div key={apt.id} className={styles['history-item']}>
+                  <div>
+                    <p className="font-medium">{apt.service.title}</p>
+                    <p className="text-sm text-gray-500">
+                      {format(apt.start, 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Avec {apt.staff.firstName} {apt.staff.lastName}
+                    </p>
+                  </div>
+                  <div>
+                    <span className={`${styles['status-badge']} ${
+                      apt.status === 'cancelled' ? styles['cancelled'] : styles['confirmed']
+                    }`}>
+                      {apt.status === 'cancelled' ? 'Annulé' : 'Effectué'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {pastAppointments.length > 2 && (
+                <button onClick={handleToggleAppointments} className={styles['toggle-button']}>
+                  <span>{showAllAppointments ? 'Voir moins' : 'Voir plus'}</span>
+                  {showAllAppointments ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {appointment.status === 'confirmed' && (
+          <div className="text-center text-sm text-gray-500 mt-6">
+            <p>Un email de confirmation a été envoyé à {appointment.clientEmail}</p>
+          </div>
+        )}
+
+        <div className={styles['confirmation-footer']}>
+          {appointment.status === 'confirmed' ? (
+            <>
               <Link href={`/?id=${businessId}`}>
                 <Button variant="outline">
                   Réserver un autre rendez-vous
                 </Button>
               </Link>
-              <Button
-                onClick={() => window.print()}
-                variant="outline"
-              >
+              <Button onClick={() => window.print()} variant="outline">
                 Imprimer
               </Button>
-            </div>
-          )}
-
-          {appointment.status === 'cancelled' && (
-            <div className="flex justify-center mt-6">
-              <Button
-                onClick={() => window.print()}
-                variant="outline"
-              >
-                Imprimer
-              </Button>
-            </div>
+            </>
+          ) : (
+            <Button onClick={() => window.print()} variant="outline">
+              Imprimer
+            </Button>
           )}
         </div>
-      )}
-    </Card>
-  </div>
-);
-
+      </div>
+    </div>
+  );
 }
