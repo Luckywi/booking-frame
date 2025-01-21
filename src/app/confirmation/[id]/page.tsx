@@ -245,8 +245,8 @@ fetchData();
 
     if (error || !appointment) {
       return (
-        <div className="booking-container min-h-screen p-4 transition-all duration-300" style={{ minHeight: '800px' }}>
-  <Card className="w-full max-w-2xl p-6 space-y-6 transition-all duration-300 ease-in-out">
+          <div className="booking-container min-h-screen p-4 transition-all duration-300" style={{ minHeight: '800px' }}>
+            <Card className="w-full max-w-2xl p-6 space-y-6 transition-all duration-300 ease-in-out">
             <div className="text-center">
               <h1 className="text-xl font-semibold text-red-600 mb-2">
                 {error || 'Rendez-vous non trouvé'}
@@ -265,8 +265,8 @@ fetchData();
       isFuture(appointment.start);
 
       return (
-        <div className="booking-container min-h-screen flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl p-6 space-y-6">
+        <div className="booking-container min-h-screen p-4 transition-all duration-300" style={{ minHeight: '800px' }}>
+            <Card className="w-full max-w-2xl p-6 space-y-6 transition-all duration-300 ease-in-out">
             <div className="text-center">
               {appointment.status === 'cancelled' ? (
                 <>
