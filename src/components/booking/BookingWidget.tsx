@@ -35,6 +35,8 @@ interface Appointment {
   staff: AppointmentStaff;
 }
 
+
+
 export default function ConfirmationPage() {
   const params = useParams();
   const [appointment, setAppointment] = useState<Appointment | null>(null);
