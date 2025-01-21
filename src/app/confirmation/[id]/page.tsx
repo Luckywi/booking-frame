@@ -116,6 +116,29 @@ export default function ConfirmationPage() {
 };
 
 
+useEffect(() => {
+  window.parent.postMessage({ 
+    type: 'pageChange',
+    step: 4
+  }, '*');
+  
+  setTimeout(calculateHeight, 0);
+}, []);
+
+// Ajouter cet effet pour surveiller les changements importants
+useEffect(() => {
+  const handleMessage = (event: MessageEvent) => {
+    if (event.data.type === 'recalculateHeight') {
+      calculateHeight();
+    }
+  };
+
+  window.addEventListener('message', handleMessage);
+  setTimeout(calculateHeight, 0);
+
+  return () => window.removeEventListener('message', handleMessage);
+}, [appointment, pastAppointments, showAllAppointments, loading, calculateHeight]);
+
     const handleCancelAppointment = async () => {
         if (!appointment || !isFuture(appointment.start)) return;
       
@@ -133,54 +156,7 @@ export default function ConfirmationPage() {
           setCancelLoading(false);
         }
       };
-
-
-      useEffect(() => {
-        // Signaler à la page parent que nous sommes sur la page de confirmation
-        window.parent.postMessage({ 
-          type: 'pageChange',
-          step: 4  // On utilise 4 pour la page de confirmation
-        }, '*');
-      }, []); // Ce useEffect ne s'exécute qu'une fois au chargement
-      
-      // Puis modifions l'effet existant pour le calcul de hauteur
-      useEffect(() => {
-        const recalculateHeights = () => {
-          calculateHeight();
-          // Ajouter plusieurs recalculs avec des délais
-          [100, 300, 500, 800].forEach(delay => {
-            setTimeout(calculateHeight, delay);
-          });
-        };
-      
-        recalculateHeights();
-      
-        // Ajouter un ResizeObserver pour détecter les changements de contenu
-        const observer = new ResizeObserver(() => {
-          recalculateHeights();
-        });
-      
-        const elements = [
-          document.querySelector('.booking-container'),
-          document.querySelector('.space-y-6'),
-          document.querySelector('.bg-gray-50')
-        ].filter(Boolean) as Element[];
-      
-        elements.forEach(element => observer.observe(element));
-
-      
-        return () => observer.disconnect();
-      }, [appointment, pastAppointments, showAllAppointments, loading, calculateHeight]);
-      
-
-      const handleToggleAppointments = () => {
-        setShowAllAppointments(prev => !prev);
-        // Forcer un recalcul après le toggle
-        [50, 150, 300, 500].forEach(delay => {
-          setTimeout(calculateHeight, delay);
-        });
-      };
-      
+  
       
       useEffect(() => {
         const fetchData = async () => {
