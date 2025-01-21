@@ -9,13 +9,9 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { 
-  Calendar, 
-  Check,
-  AlertCircle,
-  ChevronUp, 
-  ChevronDown 
-} from 'lucide-react';
+import { Calendar, Check, AlertCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { useIframeResize } from '@/lib/hooks/useIframeResize';
+
 
 
 interface AppointmentService {
@@ -42,14 +38,17 @@ interface Appointment {
 }
 
 export default function ConfirmationPage() {
-    const params = useParams();
-    const [appointment, setAppointment] = useState<Appointment | null>(null);
-    const [businessId, setBusinessId] = useState<string | null>(null); 
-    const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [cancelLoading, setCancelLoading] = useState(false);
-    const [showAllAppointments, setShowAllAppointments] = useState(false);
+  const params = useParams();
+  const [appointment, setAppointment] = useState<Appointment | null>(null);
+  const [businessId, setBusinessId] = useState<string | null>(null); 
+  const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [showAllAppointments, setShowAllAppointments] = useState(false);
+  const calculateHeight = useIframeResize();
+
+
 
 
     const fetchAppointmentHistory = async (clientEmail: string, businessId: string) => {
@@ -135,6 +134,20 @@ export default function ConfirmationPage() {
         }
       };
 
+
+      useEffect(() => {
+        calculateHeight();
+    }, [
+        appointment, 
+        pastAppointments, 
+        showAllAppointments, 
+        loading, 
+        error, 
+        calculateHeight
+    ]);
+
+
+
       useEffect(() => {
         const fetchData = async () => {
             if (!params.id) return;
@@ -199,7 +212,7 @@ fetchData();
 
     if (loading) {
       return (
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="booking-container min-h-screen flex items-center justify-center">
           <div className="text-center">Chargement...</div>
         </div>
       );
@@ -207,7 +220,7 @@ fetchData();
 
     if (error || !appointment) {
       return (
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="booking-container min-h-screen flex items-center justify-center">
           <Card className="w-full max-w-lg p-6">
             <div className="text-center">
               <h1 className="text-xl font-semibold text-red-600 mb-2">
@@ -227,7 +240,7 @@ fetchData();
       isFuture(appointment.start);
 
       return (
-        <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="booking-container min-h-screen flex items-center justify-center p-4">
           <Card className="w-full max-w-2xl p-6 space-y-6">
             <div className="text-center">
               {appointment.status === 'cancelled' ? (
@@ -242,7 +255,7 @@ fetchData();
                     Ce rendez-vous a été annulé
                   </p>
                   <Link href={`/?id=${businessId}`} className="block">
-            <Button className="w-fit py-2 text-base bg-black hover:bg-gray-800">
+            <Button className="w-fit py-2 text-base text-white bg-black hover:bg-gray-800">
                 Prendre un nouveau rendez-vous ?
             </Button>
         </Link>

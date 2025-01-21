@@ -383,7 +383,7 @@ export default function DateStaffSelection({
         <div className="font-medium text-sm text-[hsl(var(--foreground))]">
           {format(day, 'EEEE', { locale: fr })}
         </div>
-        <div className="text-sm text-muted-foreground">
+        <div className="font-medium text-sm text-[hsl(var(--foreground))]">
           {format(day, 'd', { locale: fr })}
           <span className="ml-1">
             {format(day, 'MMM', { locale: fr })}
