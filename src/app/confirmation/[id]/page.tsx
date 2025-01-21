@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useEffect, useState, useRef } from 'react';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
@@ -46,189 +45,132 @@ export default function ConfirmationPage() {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [showAllAppointments, setShowAllAppointments] = useState(false);
   const calculateHeight = useIframeResize();
-
-  // Ajout d'une référence pour suivre le premier rendu
   const initialRender = useRef(true);
 
-  // Modification de l'effet initial
-  useEffect(() => {
-    const timer = setTimeout(() => {
+  // Gestion optimisée du recalcul de hauteur
+  const triggerHeightUpdate = () => {
+    requestAnimationFrame(() => {
       calculateHeight();
-      initialRender.current = false;
-    }, 100); // Délai légèrement augmenté
+      setTimeout(calculateHeight, 150);
+    });
+  };
 
+  useEffect(() => {
+    const timer = setTimeout(triggerHeightUpdate, 100);
     return () => clearTimeout(timer);
   }, []);
 
-  // Écoute des messages de demande de hauteur
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'requestHeight') {
-        requestAnimationFrame(calculateHeight);
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    const handler = () => requestAnimationFrame(calculateHeight);
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
   }, [calculateHeight]);
 
-  // Modification de l'effet de surveillance des données
   useEffect(() => {
-    if (!initialRender.current) {
-      requestAnimationFrame(() => {
-        calculateHeight();
-      });
-    }
-  }, [appointment, pastAppointments, showAllAppointments, loading, error, calculateHeight])
+    if (!initialRender.current) triggerHeightUpdate();
+  }, [appointment, pastAppointments, showAllAppointments, loading, error]);
 
-  // Nouvel effet pour gérer la fin du chargement
   useEffect(() => {
-    if (!loading && appointment) {
-      const frame = requestAnimationFrame(() => {
-        calculateHeight();
-        // Forcer un recalcul après animation
-        setTimeout(calculateHeight, 50);
-      });
+    if (!loading && appointment) triggerHeightUpdate();
+  }, [loading, appointment]);
+
+  const fetchAppointmentHistory = async (clientEmail: string, businessId: string) => {
+    try {
+      const q = query(
+        collection(db, 'appointments'),
+        where('clientEmail', '==', clientEmail),
+        where('businessId', '==', businessId),
+        where('status', 'in', ['confirmed', 'cancelled'])
+      );
       
-      return () => cancelAnimationFrame(frame);
+      const snapshot = await getDocs(q);
+      return await Promise.all(snapshot.docs.map(async doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          start: data.start.toDate(),
+          end: data.end.toDate(),
+          createdAt: data.createdAt.toDate(),
+          service: await getServiceDetails(data.serviceId),
+          staff: await getStaffDetails(data.staffId)
+        };
+      }));
+    } catch (error) {
+      console.error('Erreur historique:', error);
+      return [];
     }
-  }, [loading, appointment, calculateHeight]);
-  
+  };
 
-    const fetchAppointmentHistory = async (clientEmail: string, businessId: string) => {
+  const getServiceDetails = async (id: string) => {
+    const doc = await getDoc(doc(db, 'services', id));
+    return doc.exists() ? doc.data() : { title: 'Service inconnu', price: 0 };
+  };
+
+  const getStaffDetails = async (id: string) => {
+    const doc = await getDoc(doc(db, 'staff', id));
+    return doc.exists() ? doc.data() : { firstName: '', lastName: '' };
+  };
+
+  const handleCancelAppointment = async () => {
+    if (!appointment || !isFuture(appointment.start)) return;
+
+    try {
+      setCancelLoading(true);
+      await updateDoc(doc(db, 'appointments', appointment.id), { status: 'cancelled' });
+      setAppointment(prev => prev ? { ...prev, status: 'cancelled' } : null);
+    } catch (error) {
+      setError('Échec de l\'annulation');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
       try {
-        const appointmentsQuery = query(
-          collection(db, 'appointments'),
-          where('clientEmail', '==', clientEmail),
-          where('businessId', '==', businessId),
-          where('status', 'in', ['confirmed', 'cancelled'])
-        );
-    
-        const querySnapshot = await getDocs(appointmentsQuery);
-        const appointments = await Promise.all(
-          querySnapshot.docs.map(async (appointmentDoc) => {
-            const data = appointmentDoc.data();
-            let serviceDetails;
-            let staffDetails;
-    
-            try {
-              const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
-              serviceDetails = serviceDoc.exists() ? serviceDoc.data() : null;
-    
-              const staffDoc = await getDoc(doc(db, 'staff', data.staffId));
-              staffDetails = staffDoc.exists() ? staffDoc.data() : null;
-            } catch (error) {
-              console.error('Erreur lors de la récupération des détails:', error);
-            }
-    
-            return {
-              id: appointmentDoc.id,
-              start: data.start.toDate(),
-              end: data.end.toDate(),
-              createdAt: data.createdAt.toDate(),
-              clientEmail: data.clientEmail,
-              clientName: data.clientName,
-              clientPhone: data.clientPhone,
-              status: data.status,
-              service: {
-                title: serviceDetails?.title || 'Service inconnu',
-                price: serviceDetails?.price || 0
-              },
-              staff: {
-                firstName: staffDetails?.firstName || '',
-                lastName: staffDetails?.lastName || ''
-              }
-            };
-          })
-        );
-    
-        return appointments
-          .filter(apt => apt.id !== params.id)
-          .sort((a, b) => b.start.getTime() - a.start.getTime());
-      } catch (error) {
-        console.error('Erreur lors de la récupération de l\'historique:', error);
-        return [];
-      }
-    };
-
-    const handleCancelAppointment = async () => {
-      if (!appointment || !isFuture(appointment.start)) return;
-    
-      try {
-        setCancelLoading(true);
-        await updateDoc(doc(db, 'appointments', appointment.id), {
-          status: 'cancelled'
-        });
-    
-        setAppointment(prev => prev ? {...prev, status: 'cancelled'} : null);
-      } catch (error) {
-        console.error('Erreur lors de l\'annulation:', error);
-        setError('Erreur lors de l\'annulation du rendez-vous');
-      } finally {
-        setCancelLoading(false);
-      }
-    };
-
-    useEffect(() => {
-      const fetchData = async () => {
-        if (!params.id) return;
-
-        try {
-          setLoading(true);
-          const appointmentDoc = await getDoc(doc(db, 'appointments', params.id as string));
-          
-          if (!appointmentDoc.exists()) {
-            setError('Rendez-vous non trouvé');
-            return;
-          }
-
-          const data = appointmentDoc.data();
-          setBusinessId(data.businessId);
-
-          const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
-          const serviceData = serviceDoc.data();
-
-          const staffDoc = await getDoc(doc(db, 'staff', data.staffId));
-          const staffData = staffDoc.data();
-
-          const currentAppointment: Appointment = {
-            id: appointmentDoc.id,
-            start: data.start.toDate(),
-            end: data.end.toDate(),
-            createdAt: data.createdAt.toDate(),
-            clientEmail: data.clientEmail,
-            clientName: data.clientName,
-            clientPhone: data.clientPhone,
-            status: data.status,
-            service: {
-              title: serviceData?.title || 'Service inconnu',
-              price: serviceData?.price || 0
-            },
-            staff: {
-              firstName: staffData?.firstName || '',
-              lastName: staffData?.lastName || ''
-            }
-          };
-          
-          setAppointment(currentAppointment);
-
-          if (data.clientEmail && data.businessId) {
-            const history = await fetchAppointmentHistory(data.clientEmail, data.businessId);
-            setPastAppointments(history);
-          }
-        } catch (error) {
-          console.error('Erreur:', error);
-          setError('Erreur lors du chargement des données');
-        } finally {
-          setLoading(false);
-          // Nouveau calcul après la fin du chargement
-          setTimeout(calculateHeight, 100);
+        setLoading(true);
+        const docSnap = await getDoc(doc(db, 'appointments', params.id as string));
+        
+        if (!docSnap.exists()) {
+          setError('Rendez-vous introuvable');
+          return;
         }
-      };
 
-      fetchData();
-    }, [params.id]);
+        const data = docSnap.data();
+        setBusinessId(data.businessId);
 
+        const [service, staff] = await Promise.all([
+          getServiceDetails(data.serviceId),
+          getStaffDetails(data.staffId)
+        ]);
+
+        setAppointment({
+          id: docSnap.id,
+          start: data.start.toDate(),
+          end: data.end.toDate(),
+          createdAt: data.createdAt.toDate(),
+          clientEmail: data.clientEmail,
+          clientName: data.clientName,
+          clientPhone: data.clientPhone,
+          status: data.status,
+          service,
+          staff
+        });
+
+        if (data.clientEmail && data.businessId) {
+          setPastAppointments(await fetchAppointmentHistory(data.clientEmail, data.businessId));
+        }
+      } catch (error) {
+        setError('Erreur de chargement');
+      } finally {
+        setLoading(false);
+        triggerHeightUpdate();
+      }
+    };
+
+    loadData();
+  }, [params.id]);
 
     if (loading) {
       return (
