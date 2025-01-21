@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+
+import { useEffect, useState, useRef } from 'react';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { format, isFuture } from 'date-fns';
@@ -36,49 +37,63 @@ interface Appointment {
 }
 
 export default function ConfirmationPage() {
-    const params = useParams();
-    const [appointment, setAppointment] = useState<Appointment | null>(null);
-    const [businessId, setBusinessId] = useState<string | null>(null); 
-    const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [cancelLoading, setCancelLoading] = useState(false);
-    const [showAllAppointments, setShowAllAppointments] = useState(false);
-    const calculateHeight = useIframeResize();
+  const params = useParams();
+  const [appointment, setAppointment] = useState<Appointment | null>(null);
+  const [businessId, setBusinessId] = useState<string | null>(null);
+  const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [showAllAppointments, setShowAllAppointments] = useState(false);
+  const calculateHeight = useIframeResize();
 
-    // Initial mount effect
-    useEffect(() => {
-      // Force initial height calculation after mount
-      const timer = setTimeout(() => {
-        calculateHeight();
-      }, 0);
+  // Ajout d'une référence pour suivre le premier rendu
+  const initialRender = useRef(true);
 
-      return () => clearTimeout(timer);
-    }, []); // Only on mount
-
-    // Listen for height requests
-    useEffect(() => {
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data?.type === 'requestHeight') {
-          calculateHeight();
-        }
-      };
-
-      window.addEventListener('message', handleMessage);
-      return () => window.removeEventListener('message', handleMessage);
-    }, [calculateHeight]);
-
-    // Watch for data changes
-    useEffect(() => {
+  // Modification de l'effet initial
+  useEffect(() => {
+    const timer = setTimeout(() => {
       calculateHeight();
-    }, [
-      appointment, 
-      pastAppointments, 
-      showAllAppointments, 
-      loading, 
-      error, 
-      calculateHeight
-    ]);
+      initialRender.current = false;
+    }, 100); // Délai légèrement augmenté
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Écoute des messages de demande de hauteur
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'requestHeight') {
+        requestAnimationFrame(calculateHeight);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [calculateHeight]);
+
+  // Modification de l'effet de surveillance des données
+  useEffect(() => {
+    if (!initialRender.current) {
+      requestAnimationFrame(() => {
+        calculateHeight();
+      });
+    }
+  }, [appointment, pastAppointments, showAllAppointments, loading, error, calculateHeight])
+
+  // Nouvel effet pour gérer la fin du chargement
+  useEffect(() => {
+    if (!loading && appointment) {
+      const frame = requestAnimationFrame(() => {
+        calculateHeight();
+        // Forcer un recalcul après animation
+        setTimeout(calculateHeight, 50);
+      });
+      
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [loading, appointment, calculateHeight]);
+  
 
     const fetchAppointmentHistory = async (clientEmail: string, businessId: string) => {
       try {
@@ -206,11 +221,14 @@ export default function ConfirmationPage() {
           setError('Erreur lors du chargement des données');
         } finally {
           setLoading(false);
+          // Nouveau calcul après la fin du chargement
+          setTimeout(calculateHeight, 100);
         }
       };
 
       fetchData();
     }, [params.id]);
+
 
     if (loading) {
       return (
