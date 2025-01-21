@@ -1,293 +1,424 @@
-
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Card } from "@/components/ui/card";
+import { useEffect, useState } from 'react';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
-import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
-import type { Service, Staff } from '@/types/booking';
-import DateStaffSelection from './DateStaffSelection';
-import ClientForm from './ClientForm';
-import { useRouter } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
+import { format, isFuture } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { Calendar, Check, AlertCircle, ChevronUp, ChevronDown } from 'lucide-react';
 import { useIframeResize } from '@/lib/hooks/useIframeResize';
 
-interface BookingWidgetProps {
-  businessId: string;
-}
-
-interface ServiceCategory {
-  id: string;
+interface AppointmentService {
   title: string;
-  order: number;
-  businessId: string;
+  price: number;
 }
 
-export default function BookingWidget({ businessId }: BookingWidgetProps) {
-  const [step, setStep] = useState(1);
-  const calculateHeight = useIframeResize();
-  
-  const [services, setServices] = useState<Service[]>([]);
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
+interface AppointmentStaff {
+  firstName: string;
+  lastName: string;
+}
+
+interface Appointment {
+  id: string;
+  start: Date;
+  end: Date;
+  createdAt: Date;
+  clientEmail: string;
+  clientName: string;
+  clientPhone: string;
+  status: 'confirmed' | 'cancelled';
+  service: AppointmentService;
+  staff: AppointmentStaff;
+}
+
+export default function ConfirmationPage() {
+  const params = useParams();
+  const [appointment, setAppointment] = useState<Appointment | null>(null);
+  const [businessId, setBusinessId] = useState<string | null>(null); 
+  const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
-  const [selectedStaffMember, setSelectedStaffMember] = useState<Staff | null>(null);
-  const [staffList, setStaffList] = useState<Staff[]>([]);
-  const router = useRouter();
-  const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [showAllAppointments, setShowAllAppointments] = useState(false);
+  const calculateHeight = useIframeResize();
 
-  const handleStepChange = (newStep: number) => {
-    setStep(newStep);
-    window.parent.postMessage({ 
-      type: 'pageChange',
-      step: newStep 
-    }, '*');
-    setTimeout(calculateHeight, 0);
+  const fetchAppointmentHistory = async (clientEmail: string, businessId: string) => {
+    try {
+      const appointmentsQuery = query(
+        collection(db, 'appointments'),
+        where('clientEmail', '==', clientEmail),
+        where('businessId', '==', businessId),
+        where('status', 'in', ['confirmed', 'cancelled'])
+      );
+  
+      const querySnapshot = await getDocs(appointmentsQuery);
+  
+      const appointments = await Promise.all(
+        querySnapshot.docs.map(async (appointmentDoc) => {
+          const data = appointmentDoc.data();
+          let serviceDetails;
+          let staffDetails;
+  
+          try {
+            const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
+            serviceDetails = serviceDoc.exists() ? serviceDoc.data() : null;
+  
+            const staffDoc = await getDoc(doc(db, 'staff', data.staffId));
+            staffDetails = staffDoc.exists() ? staffDoc.data() : null;
+          } catch (error) {
+            console.error('Erreur lors de la récupération des détails:', error);
+          }
+  
+          return {
+            id: appointmentDoc.id,
+            start: data.start.toDate(),
+            end: data.end.toDate(),
+            createdAt: data.createdAt.toDate(),
+            clientEmail: data.clientEmail,
+            clientName: data.clientName,
+            clientPhone: data.clientPhone,
+            status: data.status,
+            service: {
+              title: serviceDetails?.title || 'Service inconnu',
+              price: serviceDetails?.price || 0
+            },
+            staff: {
+              firstName: staffDetails?.firstName || '',
+              lastName: staffDetails?.lastName || ''
+            }
+          };
+        })
+      );
+  
+      return appointments
+        .filter(apt => apt.id !== params.id)
+        .sort((a, b) => b.start.getTime() - a.start.getTime());
+    } catch (error) {
+      console.error('Erreur lors de la récupération de l\'historique:', error);
+      return [];
+    }
   };
 
-  const formatDuration = (duration: { hours: number; minutes: number }) => {
-    const parts = [];
-    if (duration.hours > 0) {
-      parts.push(`${duration.hours}h`);
+  const handleCancelAppointment = async () => {
+    if (!appointment || !isFuture(appointment.start)) return;
+    
+    try {
+      setCancelLoading(true);
+      await updateDoc(doc(db, 'appointments', appointment.id), {
+        status: 'cancelled'
+      });
+    
+      setAppointment(prev => prev ? {...prev, status: 'cancelled'} : null);
+      setTimeout(calculateHeight, 150);
+    } catch (error) {
+      console.error('Erreur lors de l\'annulation:', error);
+      setError('Erreur lors de l\'annulation du rendez-vous');
+    } finally {
+      setCancelLoading(false);
     }
-    if (duration.minutes > 0) {
-      parts.push(`${duration.minutes}min`);
-    }
-    return parts.join(' ');
   };
 
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data.type === 'recalculateHeight') {
-        calculateHeight();
-      }
-    };
-  
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [calculateHeight]);
-  
-
-  const handleServiceSelect = (service: Service) => {
-    setSelectedService(service);
-    handleStepChange(2);
-  };
-
+    calculateHeight();
+  }, [
+    appointment, 
+    pastAppointments, 
+    showAllAppointments, 
+    loading, 
+    error, 
+    calculateHeight
+  ]);
 
   useEffect(() => {
-    const fetchBusinessData = async () => {
+    const fetchData = async () => {
+      if (!params.id) return;
+      
       try {
         setLoading(true);
+        const appointmentDoc = await getDoc(doc(db, 'appointments', params.id as string));
         
-        const [servicesSnapshot, categoriesSnapshot, staffSnapshot] = await Promise.all([
-          getDocs(query(collection(db, 'services'), where('businessId', '==', businessId))),
-          getDocs(query(collection(db, 'serviceCategories'), where('businessId', '==', businessId))),
-          getDocs(query(collection(db, 'staff'), where('businessId', '==', businessId)))
-        ]);
-        
-        if (servicesSnapshot.empty) {
-          setError('Business non trouvé ou aucun service disponible');
+        if (!appointmentDoc.exists()) {
+          setError('Rendez-vous non trouvé');
           return;
         }
 
-        const servicesData = servicesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Service[];
+        const data = appointmentDoc.data();
+        setBusinessId(data.businessId);
 
-        const categoriesData = categoriesSnapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            order: data.order,
-            title: data.title,
-            businessId: data.businessId
-          } as ServiceCategory;
-        }).sort((a, b) => a.order - b.order);
+        const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
+        const serviceData = serviceDoc.data();
 
-        const staffData = staffSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Staff[];
+        const staffDoc = await getDoc(doc(db, 'staff', data.staffId));
+        const staffData = staffDoc.data();
 
-        setServices(servicesData);
-        setServiceCategories(categoriesData);
-        setStaffList(staffData);
-        setError(null);
-      } catch (err) {
-        console.error('Erreur lors du chargement des données:', err);
+        const currentAppointment: Appointment = {
+          id: appointmentDoc.id,
+          start: data.start.toDate(),
+          end: data.end.toDate(),
+          createdAt: data.createdAt.toDate(),
+          clientEmail: data.clientEmail,
+          clientName: data.clientName,
+          clientPhone: data.clientPhone,
+          status: data.status,
+          service: {
+            title: serviceData?.title || 'Service inconnu',
+            price: serviceData?.price || 0
+          },
+          staff: {
+            firstName: staffData?.firstName || '',
+            lastName: staffData?.lastName || ''
+          }
+        };
+        
+        setAppointment(currentAppointment);
+
+        if (data.clientEmail && data.businessId) {
+          const history = await fetchAppointmentHistory(data.clientEmail, data.businessId);
+          setPastAppointments(history);
+        }
+
+      } catch (error) {
+        console.error('Erreur:', error);
         setError('Erreur lors du chargement des données');
       } finally {
         setLoading(false);
+        setTimeout(calculateHeight, 150);
       }
     };
 
-    if (businessId) {
-      fetchBusinessData();
-    }
-  }, [businessId]);
+    fetchData();
+  }, [params.id, calculateHeight]);
+
+  // Effet pour le recalcul initial et après les animations
+  useEffect(() => {
+    calculateHeight();
+    const timeoutId = setTimeout(calculateHeight, 300);
+    return () => clearTimeout(timeoutId);
+  }, [calculateHeight]);
+
+  const handleToggleAppointments = () => {
+    setShowAllAppointments(prev => !prev);
+    setTimeout(calculateHeight, 150);
+  };
 
   if (loading) {
     return (
-      <Card className="booking-container">
-        <div className="loading-state">Chargement...</div>
-      </Card>
+      <div className="booking-container min-h-screen flex items-center justify-center">
+        <div className="text-center">Chargement...</div>
+      </div>
     );
   }
 
-  if (error) {
+  if (error || !appointment) {
     return (
-      <Card className="booking-container">
-        <div className="error-state">{error}</div>
-      </Card>
+      <div className="booking-container min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-lg p-6">
+          <div className="text-center">
+            <h1 className="text-xl font-semibold text-red-600 mb-2">
+              {error || 'Rendez-vous non trouvé'}
+            </h1>
+            <Link href={businessId ? `/?id=${businessId}` : "/"}>
+              <Button>Retourner à l'accueil</Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
     );
   }
+
+  const isAppointmentCancellable = 
+    appointment.status === 'confirmed' && 
+    isFuture(appointment.start);
 
   return (
-    <Card className="booking-container">
-      <div className="steps-nav">
-        {[1, 2, 3].map((number) => (
-          <div key={number} className="step-item">
-            <div className={`step-number ${
-              step >= number ? 'step-number-active' : 'step-number-inactive'
-            }`}>
-              {number}
-            </div>
-            <span className={`step-label ${
-              step >= number ? 'step-label-active' : 'step-label-inactive'
-            }`}>
-              {number === 1 ? 'Service' : number === 2 ? 'Date' : 'Informations'}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <div className="p-4">
-        {step === 1 && (
-          <div className="service-list">
-            <div className="section-header">
-              <h2 className="section-title">Sélectionner un service</h2>
-            </div>
+    <div className="booking-container min-h-screen flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl p-6 space-y-6">
+        <div className="text-center">
+          {appointment.status === 'cancelled' ? (
+            <>
+              <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Rendez-vous annulé
+              </h1>
+              <p className="mt-2 mb-6 text-gray-600">
+                Ce rendez-vous a été annulé
+              </p>
+              <Link href={`/?id=${businessId}`} className="block">
+                <Button className="w-fit py-2 text-base text-white bg-black hover:bg-gray-800">
+                  Prendre un nouveau rendez-vous ?
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <Check className="w-6 h-6 text-green-600" />
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Réservation confirmée !
+              </h1>
+              <p className="mt-2 text-gray-600">
+                Votre rendez-vous a été enregistré avec succès
+              </p>
+            </>
+          )}
+        </div>
             
-            <div className="space-y-8">
-              {serviceCategories.map((category) => (
-                <div key={category.id} className="service-category">
-                  <h3 className="service-category-title">{category.title}</h3>
-                  <div className="space-y-3">
-                    {services
-                      .filter(service => service.categoryId === category.id)
-                      .map((service) => (
-                        <div
-                          key={service.id}
-                          onClick={() => handleServiceSelect(service)}
-                          className={`service-card ${
-                            selectedService?.id === service.id 
-                              ? 'service-card-selected' 
-                              : ''
-                          }`}
-                        >
-                          <div className="service-card-content">
-                            <div className="space-y-1.5">
-                              <h4 className="service-title">{service.title}</h4>
-                              <p className="service-description">{service.description}</p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="service-price">{service.price}€</p>
-                              <p className="service-duration">
-                                {formatDuration(service.duration)}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+        <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+          <h2 className="font-medium">Détails de votre rendez-vous :</h2>
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="text-gray-500">Service :</span>{' '}
+              <span className="font-medium">{appointment.service.title}</span>
+            </p>
+            <p>
+              <span className="text-gray-500">Date :</span>{' '}
+              <span className="font-medium">
+                {format(appointment.start, 'EEEE d MMMM yyyy', { locale: fr })}
+              </span>
+            </p>
+            <p>
+              <span className="text-gray-500">Heure :</span>{' '}
+              <span className="font-medium">
+                {format(appointment.start, 'HH:mm')}
+              </span>
+            </p>
+            <p>
+              <span className="text-gray-500">Avec :</span>{' '}
+              <span className="font-medium">
+                {appointment.staff.firstName} {appointment.staff.lastName}
+              </span>
+            </p>
+            <p>
+              <span className="text-gray-500">Prix :</span>{' '}
+              <span className="font-medium">{appointment.service.price}€</span>
+            </p>
+            <p>
+              <span className="text-gray-500">Client :</span>{' '}
+              <span className="font-medium">{appointment.clientName}</span>
+            </p>
+            <p>
+              <span className="text-gray-500">Email :</span>{' '}
+              <span className="font-medium">{appointment.clientEmail}</span>
+            </p>
+            <p>
+              <span className="text-gray-500">Téléphone :</span>{' '}
+              <span className="font-medium">{appointment.clientPhone}</span>
+            </p>
+            <p>
+              <span className="text-gray-500">Statut :</span>{' '}
+              <span className={`font-medium ${
+                appointment.status === 'cancelled' 
+                  ? 'text-red-600'
+                  : 'text-green-600'
+              }`}>
+                {appointment.status === 'cancelled' ? 'Annulé' : 'Confirmé'}
+              </span>
+            </p>
+          </div>
+        </div>
+           
+        {isAppointmentCancellable && (
+          <div className="flex justify-center">
+            <Button
+              variant="destructive"
+              onClick={handleCancelAppointment}
+              disabled={cancelLoading}
+            >
+              {cancelLoading ? 'Annulation...' : 'Annuler ce rendez-vous'}
+            </Button>
+          </div>
+        )}
+
+        {pastAppointments.length > 0 && (
+          <div className="mt-8">
+            <h2 className="font-medium flex items-center gap-2 mb-4">
+              <Calendar className="w-5 h-5" />
+              Historique de vos rendez-vous
+            </h2>
+            <div className="space-y-4">
+              {(showAllAppointments ? pastAppointments : pastAppointments.slice(0, 2)).map((apt) => (
+                <div
+                  key={apt.id}
+                  className="p-3 border rounded-lg flex justify-between items-center hover:bg-gray-50"
+                >
+                  <div>
+                    <p className="font-medium">{apt.service.title}</p>
+                    <p className="text-sm text-gray-500">
+                      {format(apt.start, 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Avec {apt.staff.firstName} {apt.staff.lastName}
+                    </p>
+                  </div>
+                  <div>
+                    <span className={`px-3 py-1 rounded-full text-sm
+                      ${apt.status === 'cancelled' 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-green-100 text-green-800'}`}
+                    >
+                      {apt.status === 'cancelled' ? 'Annulé' : 'Effectué'}
+                    </span>
                   </div>
                 </div>
               ))}
+
+              {pastAppointments.length > 2 && (
+                <button
+                  onClick={handleToggleAppointments}
+                  className="w-full mt-4 flex items-center justify-center gap-2 text-gray-500 hover:text-gray-700 text-sm py-2"
+                >
+                  <span>{showAllAppointments ? 'Voir moins' : 'Voir plus'}</span>
+                  {showAllAppointments ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {step === 2 && (
-          <div className="date-selector">
-            <div className="section-header">
-              <h2 className="section-title">Choisir la date et l'heure</h2>
-              <button 
-                onClick={() => handleStepChange(1)}
-                className="back-button"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Modifier le service
-              </button>
-            </div>
-            <DateStaffSelection
-              key={`date-staff-${selectedService?.id}`}
-              businessId={businessId}
-              serviceId={selectedService?.id || ''}
-              serviceDuration={selectedService?.duration || { hours: 0, minutes: 0 }}
-              selectedService={selectedService}
-              onSelect={(datetime, staffId) => {
-                setSelectedDateTime(datetime);
-                const staffMember = staffId 
-                  ? staffList.find(s => s.id === staffId) || null 
-                  : null;
-                setSelectedStaffMember(staffMember);
-                handleStepChange(3);
-              }}
-            />
+        {appointment.status === 'confirmed' && (
+          <div className="text-center text-sm text-gray-500">
+            <p>Un email de confirmation a été envoyé à {appointment.clientEmail}</p>
           </div>
         )}
 
-        {step === 3 && selectedService && selectedDateTime && selectedStaffMember && (
-          <div className="client-form">
-            <div className="section-header">
-              <h2 className="section-title">Vos informations</h2>
-              <button 
-                onClick={() => handleStepChange(2)}
-                className="back-button"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Modifier la date
-              </button>
-            </div>
-            <ClientForm
-              service={selectedService}
-              dateTime={selectedDateTime}
-              staff={selectedStaffMember}
-              onSubmit={async (clientData) => {
-                try {
-                  const endDateTime = new Date(selectedDateTime);
-                  endDateTime.setHours(
-                    endDateTime.getHours() + selectedService.duration.hours,
-                    endDateTime.getMinutes() + selectedService.duration.minutes
-                  );
-              
-                  const appointmentData = {
-                    businessId: businessId,
-                    staffId: selectedStaffMember.id,
-                    serviceId: selectedService.id,
-                    clientName: `${clientData.firstName} ${clientData.lastName}`,
-                    clientEmail: clientData.email,
-                    clientPhone: clientData.phone,
-                    start: selectedDateTime,
-                    end: endDateTime,
-                    status: 'confirmed',
-                    createdAt: new Date(),
-                    notes: ''
-                  };
-              
-                  const docRef = await addDoc(collection(db, 'appointments'), appointmentData);
-                  router.push(`/confirmation/${docRef.id}`);
-                  
-                } catch (error) {
-                  console.error('Erreur lors de la création du rendez-vous:', error);
-                }
-              }}
-              onBack={() => handleStepChange(2)}
-            />
+        {appointment.status === 'confirmed' && (
+          <div className="flex justify-center gap-4">
+            <Link href={`/?id=${businessId}`}>
+              <Button variant="outline">
+                Réserver un autre rendez-vous
+              </Button>
+            </Link>
+            <Button
+              onClick={() => window.print()}
+              variant="outline"
+            >
+              Imprimer
+            </Button>
           </div>
         )}
-      </div>
-    </Card>
+
+        {appointment.status === 'cancelled' && (
+          <div className="flex justify-center">
+            <Button
+              onClick={() => window.print()}
+              variant="outline"
+            >
+              Imprimer
+            </Button>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }
