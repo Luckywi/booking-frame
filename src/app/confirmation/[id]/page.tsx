@@ -212,30 +212,28 @@ fetchData();
 
 if (loading) {
   return (
-    <div className="booking-container">
-      <Card>
-        <div className="loading-state p-4">Chargement...</div>
-      </Card>
-    </div>
+    <Card className="booking-container">
+      <div className="loading-state p-4">
+        Chargement...
+      </div>
+    </Card>
   );
 }
 
 if (error || !appointment) {
   return (
-    <div className="booking-container">
-      <Card>
-        <div className="error-state p-4">
-          <h1 className="text-xl font-semibold text-[hsl(var(--destructive))] mb-2">
-            {error || 'Rendez-vous non trouvé'}
-          </h1>
-          <Link href="/">
-            <Button className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
-              Retourner à l'accueil
-            </Button>
-          </Link>
-        </div>
-      </Card>
-    </div>
+    <Card className="booking-container">
+      <div className="error-state p-4">
+        <h1 className="text-xl font-semibold text-[hsl(var(--destructive))] mb-2">
+          {error || 'Rendez-vous non trouvé'}
+        </h1>
+        <Link href="/">
+          <Button className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
+            Retourner à l'accueil
+          </Button>
+        </Link>
+      </div>
+    </Card>
   );
 }
 
@@ -244,176 +242,182 @@ const isAppointmentCancellable =
   isFuture(appointment.start);
 
 return (
-  <div className="booking-container">
-    <Card>
-      <div className="p-4 space-y-6">
-        <div className="text-center">
-          {appointment.status === 'cancelled' ? (
-            <>
-              <div className="mx-auto w-12 h-12 bg-[hsl(var(--destructive)]/10 rounded-full flex items-center justify-center mb-4">
-                <AlertCircle className="w-6 h-6 text-[hsl(var(--destructive))]" />
-              </div>
-              <h1 className="section-title mb-2">Rendez-vous annulé</h1>
-              <p className="section-description mb-4">Ce rendez-vous a été annulé</p>
-              <Link href={`/?id=${businessId}`}>
-                <Button className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary))]/90">
-                  Prendre un nouveau rendez-vous ?
-                </Button>
-              </Link>
-            </>
-          ) : (
-            <>
-              <div className="mx-auto w-12 h-12 bg-[hsl(var(--accent))] rounded-full flex items-center justify-center mb-4">
-                <Check className="w-6 h-6 text-[hsl(var(--accent-foreground))]" />
-              </div>
-              <h1 className="section-title mb-2">Réservation confirmée !</h1>
-              <p className="section-description">
-                Votre rendez-vous a été enregistré avec succès
-              </p>
-            </>
-          )}
-        </div>
-
-        <div className="booking-summary">
-          <h2 className="summary-title mb-4">Détails de votre rendez-vous :</h2>
-          <div className="space-y-3">
-            <p>
-              <span className="text-[hsl(var(--muted-foreground))]">Service :</span>{' '}
-              <span className="font-medium">{appointment.service.title}</span>
-            </p>
-            <p>
-              <span className="text-[hsl(var(--muted-foreground))]">Date :</span>{' '}
-              <span className="font-medium">
-                {format(appointment.start, 'EEEE d MMMM yyyy', { locale: fr })}
-              </span>
-            </p>
-            <p>
-              <span className="text-[hsl(var(--muted-foreground))]">Heure :</span>{' '}
-              <span className="font-medium">
-                {format(appointment.start, 'HH:mm')}
-              </span>
-            </p>
-            <p>
-              <span className="text-[hsl(var(--muted-foreground))]">Avec :</span>{' '}
-              <span className="font-medium">
-                {appointment.staff.firstName} {appointment.staff.lastName}
-              </span>
-            </p>
-            <p>
-              <span className="text-[hsl(var(--muted-foreground))]">Prix :</span>{' '}
-              <span className="font-medium">{appointment.service.price}€</span>
-            </p>
-            <p>
-              <span className="text-[hsl(var(--muted-foreground))]">Client :</span>{' '}
-              <span className="font-medium">{appointment.clientName}</span>
-            </p>
-            <p>
-              <span className="text-[hsl(var(--muted-foreground))]">Email :</span>{' '}
-              <span className="font-medium">{appointment.clientEmail}</span>
-            </p>
-            <p>
-              <span className="text-[hsl(var(--muted-foreground))]">Téléphone :</span>{' '}
-              <span className="font-medium">{appointment.clientPhone}</span>
-            </p>
-            <p>
-              <span className="text-[hsl(var(--muted-foreground))]">Statut :</span>{' '}
-              <span className={`font-medium ${
-                appointment.status === 'cancelled' 
-                  ? 'text-[hsl(var(--destructive))]'
-                  : 'text-[hsl(var(--accent-foreground))]'
-              }`}>
-                {appointment.status === 'cancelled' ? 'Annulé' : 'Confirmé'}
-              </span>
-            </p>
-          </div>
-        </div>
-
-        {isAppointmentCancellable && (
-          <Button
-            variant="outline"
-            onClick={handleCancelAppointment}
-            disabled={cancelLoading}
-            className="w-full text-[hsl(var(--destructive))] border-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive))]/10"
-          >
-            {cancelLoading ? 'Annulation...' : 'Annuler ce rendez-vous'}
-          </Button>
-        )}
-
-        {pastAppointments.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="summary-title flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
-              Historique de vos rendez-vous
-            </h2>
-            <div className="space-y-3">
-              {(showAllAppointments ? pastAppointments : pastAppointments.slice(0, 2)).map((apt) => (
-                <div
-                  key={apt.id}
-                  className="p-4 border rounded-lg flex justify-between items-center hover:bg-[hsl(var(--accent))]"
-                >
-                  <div>
-                    <p className="service-title">{apt.service.title}</p>
-                    <p className="service-description">
-                      {format(apt.start, 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}
-                    </p>
-                    <p className="service-description">
-                      Avec {apt.staff.firstName} {apt.staff.lastName}
-                    </p>
-                  </div>
-                  <div>
-                    <span className={`px-3 py-1 rounded-full text-sm ${
-                      apt.status === 'cancelled'
-                        ? 'bg-[hsl(var(--destructive))]/10 text-[hsl(var(--destructive))]'
-                        : 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]'
-                    }`}>
-                      {apt.status === 'cancelled' ? 'Annulé' : 'Effectué'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-
-              {pastAppointments.length > 2 && (
-                <button
-                  onClick={() => setShowAllAppointments(!showAllAppointments)}
-                  className="w-full flex items-center justify-center gap-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] border rounded-lg p-3"
-                >
-                  <span>{showAllAppointments ? 'Voir moins' : 'Voir plus'}</span>
-                  {showAllAppointments ? (
-                    <ChevronUp className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                </button>
-              )}
+  <Card className="booking-container">
+    <div className="p-4 space-y-6">
+      <div className="text-center">
+        {appointment.status === 'cancelled' ? (
+          <>
+            <div className="mx-auto w-12 h-12 bg-[hsl(var(--destructive))]/10 rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="w-6 h-6 text-[hsl(var(--destructive))]" />
             </div>
-          </div>
-        )}
-
-        {appointment.status === 'confirmed' && (
-          <p className="text-center text-sm text-[hsl(var(--muted-foreground))]">
-            Un email de confirmation a été envoyé à {appointment.clientEmail}
-          </p>
-        )}
-
-        <div className="flex justify-center gap-4">
-          {appointment.status === 'confirmed' && (
+            <h1 className="section-title mb-2">
+              Rendez-vous annulé
+            </h1>
+            <p className="section-description mb-4">
+              Ce rendez-vous a été annulé
+            </p>
             <Link href={`/?id=${businessId}`}>
-              <Button variant="outline" className="bg-[hsl(var(--background))] border-[hsl(var(--border))]">
-                Réserver un autre rendez-vous
+              <Button className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary))]/90">
+                Prendre un nouveau rendez-vous ?
               </Button>
             </Link>
-          )}
-          <Button
-            onClick={() => window.print()}
-            variant="outline"
-            className="bg-[hsl(var(--background))] border-[hsl(var(--border))]"
-          >
-            Imprimer
-          </Button>
+          </>
+        ) : (
+          <>
+            <div className="mx-auto w-12 h-12 bg-[hsl(var(--accent))] rounded-full flex items-center justify-center mb-4">
+              <Check className="w-6 h-6 text-[hsl(var(--accent-foreground))]" />
+            </div>
+            <h1 className="section-title mb-2">
+              Réservation confirmée !
+            </h1>
+            <p className="section-description">
+              Votre rendez-vous a été enregistré avec succès
+            </p>
+          </>
+        )}
+      </div>
+
+      <div className="booking-summary">
+        <h2 className="summary-title mb-4">
+          Détails de votre rendez-vous :
+        </h2>
+        <div className="space-y-3">
+          <p>
+            <span className="text-[hsl(var(--muted-foreground))]">Service :</span>{' '}
+            <span className="font-medium">{appointment.service.title}</span>
+          </p>
+          <p>
+            <span className="text-[hsl(var(--muted-foreground))]">Date :</span>{' '}
+            <span className="font-medium">
+              {format(appointment.start, 'EEEE d MMMM yyyy', { locale: fr })}
+            </span>
+          </p>
+          <p>
+            <span className="text-[hsl(var(--muted-foreground))]">Heure :</span>{' '}
+            <span className="font-medium">
+              {format(appointment.start, 'HH:mm')}
+            </span>
+          </p>
+          <p>
+            <span className="text-[hsl(var(--muted-foreground))]">Avec :</span>{' '}
+            <span className="font-medium">
+              {appointment.staff.firstName} {appointment.staff.lastName}
+            </span>
+          </p>
+          <p>
+            <span className="text-[hsl(var(--muted-foreground))]">Prix :</span>{' '}
+            <span className="font-medium">{appointment.service.price}€</span>
+          </p>
+          <p>
+            <span className="text-[hsl(var(--muted-foreground))]">Client :</span>{' '}
+            <span className="font-medium">{appointment.clientName}</span>
+          </p>
+          <p>
+            <span className="text-[hsl(var(--muted-foreground))]">Email :</span>{' '}
+            <span className="font-medium">{appointment.clientEmail}</span>
+          </p>
+          <p>
+            <span className="text-[hsl(var(--muted-foreground))]">Téléphone :</span>{' '}
+            <span className="font-medium">{appointment.clientPhone}</span>
+          </p>
+          <p>
+            <span className="text-[hsl(var(--muted-foreground))]">Statut :</span>{' '}
+            <span className={`font-medium ${
+              appointment.status === 'cancelled' 
+                ? 'text-[hsl(var(--destructive))]'
+                : 'text-[hsl(var(--accent-foreground))]'
+            }`}>
+              {appointment.status === 'cancelled' ? 'Annulé' : 'Confirmé'}
+            </span>
+          </p>
         </div>
       </div>
-    </Card>
-  </div>
-);
-}
 
+      {isAppointmentCancellable && (
+        <Button
+          variant="outline"
+          onClick={handleCancelAppointment}
+          disabled={cancelLoading}
+          className="w-full text-[hsl(var(--destructive))] border-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive))]/10"
+        >
+          {cancelLoading ? 'Annulation...' : 'Annuler ce rendez-vous'}
+        </Button>
+      )}
+
+      {pastAppointments.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="summary-title flex items-center gap-2">
+            <Calendar className="w-5 h-5" />
+            Historique de vos rendez-vous
+          </h2>
+          <div className="space-y-3">
+            {(showAllAppointments ? pastAppointments : pastAppointments.slice(0, 2)).map((apt) => (
+              <div
+                key={apt.id}
+                className="p-4 border rounded-lg flex justify-between items-center hover:bg-[hsl(var(--accent))]"
+              >
+                <div>
+                  <p className="service-title">{apt.service.title}</p>
+                  <p className="service-description">
+                    {format(apt.start, 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}
+                  </p>
+                  <p className="service-description">
+                    Avec {apt.staff.firstName} {apt.staff.lastName}
+                  </p>
+                </div>
+                <div>
+                  <span className={`px-3 py-1 rounded-full text-sm ${
+                    apt.status === 'cancelled'
+                      ? 'bg-[hsl(var(--destructive))]/10 text-[hsl(var(--destructive))]'
+                      : 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]'
+                  }`}>
+                    {apt.status === 'cancelled' ? 'Annulé' : 'Effectué'}
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {pastAppointments.length > 2 && (
+              <button
+                onClick={() => setShowAllAppointments(!showAllAppointments)}
+                className="w-full flex items-center justify-center gap-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] border rounded-lg p-3"
+              >
+                <span>{showAllAppointments ? 'Voir moins' : 'Voir plus'}</span>
+                {showAllAppointments ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {appointment.status === 'confirmed' && (
+        <p className="text-center text-sm text-[hsl(var(--muted-foreground))]">
+          Un email de confirmation a été envoyé à {appointment.clientEmail}
+        </p>
+      )}
+
+      <div className="flex justify-center gap-4">
+        {appointment.status === 'confirmed' && (
+          <Link href={`/?id=${businessId}`}>
+            <Button variant="outline" className="bg-[hsl(var(--background))] border-[hsl(var(--border))]">
+              Réserver un autre rendez-vous
+            </Button>
+          </Link>
+        )}
+        <Button
+          onClick={() => window.print()}
+          variant="outline"
+          className="bg-[hsl(var(--background))] border-[hsl(var(--border))]"
+        >
+          Imprimer
+        </Button>
+      </div>
+    </div>
+  </Card>
+);
+
+};
