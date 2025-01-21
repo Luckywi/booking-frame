@@ -12,8 +12,6 @@ import { useParams } from 'next/navigation';
 import { Calendar, Check, AlertCircle, ChevronUp, ChevronDown } from 'lucide-react';
 import { useIframeResize } from '@/lib/hooks/useIframeResize';
 
-
-
 interface AppointmentService {
   title: string;
   price: number;
@@ -38,32 +36,60 @@ interface Appointment {
 }
 
 export default function ConfirmationPage() {
-  const params = useParams();
-  const [appointment, setAppointment] = useState<Appointment | null>(null);
-  const [businessId, setBusinessId] = useState<string | null>(null); 
-  const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [cancelLoading, setCancelLoading] = useState(false);
-  const [showAllAppointments, setShowAllAppointments] = useState(false);
-  const calculateHeight = useIframeResize();
+    const params = useParams();
+    const [appointment, setAppointment] = useState<Appointment | null>(null);
+    const [businessId, setBusinessId] = useState<string | null>(null); 
+    const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [cancelLoading, setCancelLoading] = useState(false);
+    const [showAllAppointments, setShowAllAppointments] = useState(false);
+    const calculateHeight = useIframeResize();
 
+    // Initial mount effect
+    useEffect(() => {
+      // Force initial height calculation after mount
+      const timer = setTimeout(() => {
+        calculateHeight();
+      }, 0);
 
+      return () => clearTimeout(timer);
+    }, []); // Only on mount
 
+    // Listen for height requests
+    useEffect(() => {
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === 'requestHeight') {
+          calculateHeight();
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }, [calculateHeight]);
+
+    // Watch for data changes
+    useEffect(() => {
+      calculateHeight();
+    }, [
+      appointment, 
+      pastAppointments, 
+      showAllAppointments, 
+      loading, 
+      error, 
+      calculateHeight
+    ]);
 
     const fetchAppointmentHistory = async (clientEmail: string, businessId: string) => {
       try {
-        // Ajout du filtre businessId dans la requête
         const appointmentsQuery = query(
           collection(db, 'appointments'),
           where('clientEmail', '==', clientEmail),
-          where('businessId', '==', businessId),  // Ajout de cette ligne
+          where('businessId', '==', businessId),
           where('status', 'in', ['confirmed', 'cancelled'])
         );
     
         const querySnapshot = await getDocs(appointmentsQuery);
-    
-        // Ensuite, pour chaque rendez-vous, récupérer les détails
         const appointments = await Promise.all(
           querySnapshot.docs.map(async (appointmentDoc) => {
             const data = appointmentDoc.data();
@@ -71,18 +97,15 @@ export default function ConfirmationPage() {
             let staffDetails;
     
             try {
-              // Récupération des détails du service
               const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
               serviceDetails = serviceDoc.exists() ? serviceDoc.data() : null;
     
-              // Récupération des détails du staff
               const staffDoc = await getDoc(doc(db, 'staff', data.staffId));
               staffDetails = staffDoc.exists() ? staffDoc.data() : null;
             } catch (error) {
               console.error('Erreur lors de la récupération des détails:', error);
             }
     
-            // Construction de l'objet rendez-vous
             return {
               id: appointmentDoc.id,
               start: data.start.toDate(),
@@ -104,320 +127,294 @@ export default function ConfirmationPage() {
           })
         );
     
-        // Filtrer et trier les résultats
         return appointments
-      .filter(apt => apt.id !== params.id)
-      .sort((a, b) => b.start.getTime() - a.start.getTime());
-
-  } catch (error) {
-    console.error('Erreur lors de la récupération de l\'historique:', error);
-    return [];
-  }
-};
-
+          .filter(apt => apt.id !== params.id)
+          .sort((a, b) => b.start.getTime() - a.start.getTime());
+      } catch (error) {
+        console.error('Erreur lors de la récupération de l\'historique:', error);
+        return [];
+      }
+    };
 
     const handleCancelAppointment = async () => {
-        if (!appointment || !isFuture(appointment.start)) return;
-      
+      if (!appointment || !isFuture(appointment.start)) return;
+    
+      try {
+        setCancelLoading(true);
+        await updateDoc(doc(db, 'appointments', appointment.id), {
+          status: 'cancelled'
+        });
+    
+        setAppointment(prev => prev ? {...prev, status: 'cancelled'} : null);
+      } catch (error) {
+        console.error('Erreur lors de l\'annulation:', error);
+        setError('Erreur lors de l\'annulation du rendez-vous');
+      } finally {
+        setCancelLoading(false);
+      }
+    };
+
+    useEffect(() => {
+      const fetchData = async () => {
+        if (!params.id) return;
+
         try {
-          setCancelLoading(true);
-          await updateDoc(doc(db, 'appointments', appointment.id), {
-            status: 'cancelled'
-          });
-      
-          setAppointment(prev => prev ? {...prev, status: 'cancelled'} : null);
+          setLoading(true);
+          const appointmentDoc = await getDoc(doc(db, 'appointments', params.id as string));
+          
+          if (!appointmentDoc.exists()) {
+            setError('Rendez-vous non trouvé');
+            return;
+          }
+
+          const data = appointmentDoc.data();
+          setBusinessId(data.businessId);
+
+          const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
+          const serviceData = serviceDoc.data();
+
+          const staffDoc = await getDoc(doc(db, 'staff', data.staffId));
+          const staffData = staffDoc.data();
+
+          const currentAppointment: Appointment = {
+            id: appointmentDoc.id,
+            start: data.start.toDate(),
+            end: data.end.toDate(),
+            createdAt: data.createdAt.toDate(),
+            clientEmail: data.clientEmail,
+            clientName: data.clientName,
+            clientPhone: data.clientPhone,
+            status: data.status,
+            service: {
+              title: serviceData?.title || 'Service inconnu',
+              price: serviceData?.price || 0
+            },
+            staff: {
+              firstName: staffData?.firstName || '',
+              lastName: staffData?.lastName || ''
+            }
+          };
+          
+          setAppointment(currentAppointment);
+
+          if (data.clientEmail && data.businessId) {
+            const history = await fetchAppointmentHistory(data.clientEmail, data.businessId);
+            setPastAppointments(history);
+          }
         } catch (error) {
-          console.error('Erreur lors de l\'annulation:', error);
-          setError('Erreur lors de l\'annulation du rendez-vous');
+          console.error('Erreur:', error);
+          setError('Erreur lors du chargement des données');
         } finally {
-          setCancelLoading(false);
+          setLoading(false);
         }
       };
 
+      fetchData();
+    }, [params.id]);
 
-      useEffect(() => {
-        calculateHeight();
-    }, [
-        appointment, 
-        pastAppointments, 
-        showAllAppointments, 
-        loading, 
-        error, 
-        calculateHeight
-    ]);
+    if (loading) {
+      return (
+        <Card className="booking-container w-full max-w-3xl mx-auto">
+          <div className="p-4">
+            <div className="loading-state">Chargement...</div>
+          </div>
+        </Card>
+      );
+    }
 
-
-
-      useEffect(() => {
-        const fetchData = async () => {
-            if (!params.id) return;
-
-            try {
-                setLoading(true);
-                const appointmentDoc = await getDoc(doc(db, 'appointments', params.id as string));
-                
-                if (!appointmentDoc.exists()) {
-                    setError('Rendez-vous non trouvé');
-                    return;
-                }
-
-                const data = appointmentDoc.data();
-                setBusinessId(data.businessId);
-      
-            // Récupérer les détails du service
-            const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
-            const serviceData = serviceDoc.data();
-      
-            // Récupérer les détails du staff
-            const staffDoc = await getDoc(doc(db, 'staff', data.staffId));
-            const staffData = staffDoc.data();
-      
-            const currentAppointment: Appointment = {
-              id: appointmentDoc.id,
-              start: data.start.toDate(),
-              end: data.end.toDate(),
-              createdAt: data.createdAt.toDate(),
-              clientEmail: data.clientEmail,
-              clientName: data.clientName,
-              clientPhone: data.clientPhone,
-              status: data.status,
-              service: {
-                title: serviceData?.title || 'Service inconnu',
-                price: serviceData?.price || 0
-              },
-              staff: {
-                firstName: staffData?.firstName || '',
-                lastName: staffData?.lastName || ''
-              }
-            };
-            
-            setAppointment(currentAppointment);
-
-      // Modification ici pour passer le businessId
-      if (data.clientEmail && data.businessId) {
-        const history = await fetchAppointmentHistory(data.clientEmail, data.businessId);
-        setPastAppointments(history);
-      }
-    } catch (error) {
-      console.error('Erreur:', error);
-      setError('Erreur lors du chargement des données');
-  } finally {
-      setLoading(false);
-  }
-};
-
-fetchData();
-}, [params.id]);
-
-
-if (loading) {
-  return (
-    <Card className="booking-container">
-      <div className="loading-state p-4">
-        Chargement...
-      </div>
-    </Card>
-  );
-}
-
-if (error || !appointment) {
-  return (
-    <Card className="booking-container">
-      <div className="error-state p-4">
-        <h1 className="text-xl font-semibold text-[hsl(var(--destructive))] mb-2">
-          {error || 'Rendez-vous non trouvé'}
-        </h1>
-        <Link href="/">
-          <Button className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
-            Retourner à l'accueil
-          </Button>
-        </Link>
-      </div>
-    </Card>
-  );
-}
-
-const isAppointmentCancellable = 
-  appointment.status === 'confirmed' && 
-  isFuture(appointment.start);
-
-return (
-  <Card className="booking-container">
-    <div className="p-4 space-y-6">
-      <div className="text-center">
-        {appointment.status === 'cancelled' ? (
-          <>
-            <div className="mx-auto w-12 h-12 bg-[hsl(var(--destructive))]/10 rounded-full flex items-center justify-center mb-4">
-              <AlertCircle className="w-6 h-6 text-[hsl(var(--destructive))]" />
+    if (error || !appointment) {
+      return (
+        <Card className="booking-container w-full max-w-3xl mx-auto">
+          <div className="p-4">
+            <div className="error-state">
+              <h1 className="text-xl font-semibold text-[hsl(var(--destructive))] mb-2">
+                {error || 'Rendez-vous non trouvé'}
+              </h1>
+              <Link href="/">
+                <Button className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
+                  Retourner à l'accueil
+                </Button>
+              </Link>
             </div>
-            <h1 className="section-title mb-2">
-              Rendez-vous annulé
-            </h1>
-            <p className="section-description mb-4">
-              Ce rendez-vous a été annulé
-            </p>
-            <Link href={`/?id=${businessId}`}>
-              <Button className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary))]/90">
-                Prendre un nouveau rendez-vous ?
-              </Button>
-            </Link>
-          </>
-        ) : (
-          <>
-            <div className="mx-auto w-12 h-12 bg-[hsl(var(--accent))] rounded-full flex items-center justify-center mb-4">
-              <Check className="w-6 h-6 text-[hsl(var(--accent-foreground))]" />
-            </div>
-            <h1 className="section-title mb-2">
-              Réservation confirmée !
-            </h1>
-            <p className="section-description">
-              Votre rendez-vous a été enregistré avec succès
-            </p>
-          </>
-        )}
-      </div>
+          </div>
+        </Card>
+      );
+    }
 
-      <div className="booking-summary">
-        <h2 className="summary-title mb-4">
-          Détails de votre rendez-vous :
-        </h2>
-        <div className="space-y-3">
-          <p>
-            <span className="text-[hsl(var(--muted-foreground))]">Service :</span>{' '}
-            <span className="font-medium">{appointment.service.title}</span>
-          </p>
-          <p>
-            <span className="text-[hsl(var(--muted-foreground))]">Date :</span>{' '}
-            <span className="font-medium">
-              {format(appointment.start, 'EEEE d MMMM yyyy', { locale: fr })}
-            </span>
-          </p>
-          <p>
-            <span className="text-[hsl(var(--muted-foreground))]">Heure :</span>{' '}
-            <span className="font-medium">
-              {format(appointment.start, 'HH:mm')}
-            </span>
-          </p>
-          <p>
-            <span className="text-[hsl(var(--muted-foreground))]">Avec :</span>{' '}
-            <span className="font-medium">
-              {appointment.staff.firstName} {appointment.staff.lastName}
-            </span>
-          </p>
-          <p>
-            <span className="text-[hsl(var(--muted-foreground))]">Prix :</span>{' '}
-            <span className="font-medium">{appointment.service.price}€</span>
-          </p>
-          <p>
-            <span className="text-[hsl(var(--muted-foreground))]">Client :</span>{' '}
-            <span className="font-medium">{appointment.clientName}</span>
-          </p>
-          <p>
-            <span className="text-[hsl(var(--muted-foreground))]">Email :</span>{' '}
-            <span className="font-medium">{appointment.clientEmail}</span>
-          </p>
-          <p>
-            <span className="text-[hsl(var(--muted-foreground))]">Téléphone :</span>{' '}
-            <span className="font-medium">{appointment.clientPhone}</span>
-          </p>
-          <p>
-            <span className="text-[hsl(var(--muted-foreground))]">Statut :</span>{' '}
-            <span className={`font-medium ${
-              appointment.status === 'cancelled' 
-                ? 'text-[hsl(var(--destructive))]'
-                : 'text-[hsl(var(--accent-foreground))]'
-            }`}>
-              {appointment.status === 'cancelled' ? 'Annulé' : 'Confirmé'}
-            </span>
-          </p>
-        </div>
-      </div>
+    const isAppointmentCancellable = 
+      appointment.status === 'confirmed' && 
+      isFuture(appointment.start);
 
-      {isAppointmentCancellable && (
-        <Button
-          variant="outline"
-          onClick={handleCancelAppointment}
-          disabled={cancelLoading}
-          className="w-full text-[hsl(var(--destructive))] border-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive))]/10"
-        >
-          {cancelLoading ? 'Annulation...' : 'Annuler ce rendez-vous'}
-        </Button>
-      )}
-
-      {pastAppointments.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="summary-title flex items-center gap-2">
-            <Calendar className="w-5 h-5" />
-            Historique de vos rendez-vous
-          </h2>
-          <div className="space-y-3">
-            {(showAllAppointments ? pastAppointments : pastAppointments.slice(0, 2)).map((apt) => (
-              <div
-                key={apt.id}
-                className="p-4 border rounded-lg flex justify-between items-center hover:bg-[hsl(var(--accent))]"
-              >
-                <div>
-                  <p className="service-title">{apt.service.title}</p>
-                  <p className="service-description">
-                    {format(apt.start, 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}
-                  </p>
-                  <p className="service-description">
-                    Avec {apt.staff.firstName} {apt.staff.lastName}
-                  </p>
+    return (
+      <Card className="booking-container w-full max-w-3xl mx-auto">
+        <div className="p-4 space-y-6">
+          <div className="text-center">
+            {appointment.status === 'cancelled' ? (
+              <>
+                <div className="mx-auto w-12 h-12 bg-[hsl(var(--destructive))]/10 rounded-full flex items-center justify-center mb-4">
+                  <AlertCircle className="w-6 h-6 text-[hsl(var(--destructive))]" />
                 </div>
-                <div>
-                  <span className={`px-3 py-1 rounded-full text-sm ${
-                    apt.status === 'cancelled'
-                      ? 'bg-[hsl(var(--destructive))]/10 text-[hsl(var(--destructive))]'
-                      : 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]'
-                  }`}>
-                    {apt.status === 'cancelled' ? 'Annulé' : 'Effectué'}
-                  </span>
+                <h1 className="section-title mb-2">Rendez-vous annulé</h1>
+                <p className="section-description mb-4">Ce rendez-vous a été annulé</p>
+                <Link href={`/?id=${businessId}`}>
+                  <Button className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary))]/90">
+                    Prendre un nouveau rendez-vous ?
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <div className="mx-auto w-12 h-12 bg-[hsl(var(--accent))] rounded-full flex items-center justify-center mb-4">
+                  <Check className="w-6 h-6 text-[hsl(var(--accent-foreground))]" />
                 </div>
-              </div>
-            ))}
-
-            {pastAppointments.length > 2 && (
-              <button
-                onClick={() => setShowAllAppointments(!showAllAppointments)}
-                className="w-full flex items-center justify-center gap-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] border rounded-lg p-3"
-              >
-                <span>{showAllAppointments ? 'Voir moins' : 'Voir plus'}</span>
-                {showAllAppointments ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
-              </button>
+                <h1 className="section-title mb-2">Réservation confirmée !</h1>
+                <p className="section-description">
+                  Votre rendez-vous a été enregistré avec succès
+                </p>
+              </>
             )}
           </div>
-        </div>
-      )}
 
-      {appointment.status === 'confirmed' && (
-        <p className="text-center text-sm text-[hsl(var(--muted-foreground))]">
-          Un email de confirmation a été envoyé à {appointment.clientEmail}
-        </p>
-      )}
+          <div className="booking-summary">
+            <h2 className="summary-title mb-4">Détails de votre rendez-vous :</h2>
+            <div className="space-y-3">
+              <p>
+                <span className="text-[hsl(var(--muted-foreground))]">Service :</span>{' '}
+                <span className="font-medium">{appointment.service.title}</span>
+              </p>
+              <p>
+                <span className="text-[hsl(var(--muted-foreground))]">Date :</span>{' '}
+                <span className="font-medium">
+                  {format(appointment.start, 'EEEE d MMMM yyyy', { locale: fr })}
+                </span>
+              </p>
+              <p>
+                <span className="text-[hsl(var(--muted-foreground))]">Heure :</span>{' '}
+                <span className="font-medium">
+                  {format(appointment.start, 'HH:mm')}
+                </span>
+              </p>
+              <p>
+                <span className="text-[hsl(var(--muted-foreground))]">Avec :</span>{' '}
+                <span className="font-medium">
+                  {appointment.staff.firstName} {appointment.staff.lastName}
+                </span>
+              </p>
+              <p>
+                <span className="text-[hsl(var(--muted-foreground))]">Prix :</span>{' '}
+                <span className="font-medium">{appointment.service.price}€</span>
+              </p>
+              <p>
+                <span className="text-[hsl(var(--muted-foreground))]">Client :</span>{' '}
+                <span className="font-medium">{appointment.clientName}</span>
+              </p>
+              <p>
+                <span className="text-[hsl(var(--muted-foreground))]">Email :</span>{' '}
+                <span className="font-medium">{appointment.clientEmail}</span>
+              </p>
+              <p>
+                <span className="text-[hsl(var(--muted-foreground))]">Téléphone :</span>{' '}
+                <span className="font-medium">{appointment.clientPhone}</span>
+              </p>
+              <p>
+                <span className="text-[hsl(var(--muted-foreground))]">Statut :</span>{' '}
+                <span className={`font-medium ${
+                  appointment.status === 'cancelled' 
+                    ? 'text-[hsl(var(--destructive))]'
+                    : 'text-[hsl(var(--accent-foreground))]'
+                }`}>
+                  {appointment.status === 'cancelled' ? 'Annulé' : 'Confirmé'}
+                </span>
+              </p>
+            </div>
+          </div>
 
-      <div className="flex justify-center gap-4">
-        {appointment.status === 'confirmed' && (
-          <Link href={`/?id=${businessId}`}>
-            <Button variant="outline" className="bg-[hsl(var(--background))] border-[hsl(var(--border))]">
-              Réserver un autre rendez-vous
+          {isAppointmentCancellable && (
+            <Button
+              variant="outline"
+              onClick={handleCancelAppointment}
+              disabled={cancelLoading}
+              className="w-full text-[hsl(var(--destructive))] border-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive))]/10"
+            >
+              {cancelLoading ? 'Annulation...' : 'Annuler ce rendez-vous'}
             </Button>
-          </Link>
-        )}
-        <Button
-          onClick={() => window.print()}
-          variant="outline"
-          className="bg-[hsl(var(--background))] border-[hsl(var(--border))]"
+          )}
+{pastAppointments.length > 0 && (
+  <div className="space-y-4">
+    <h2 className="summary-title flex items-center gap-2">
+      <Calendar className="w-5 h-5" />
+      Historique de vos rendez-vous
+    </h2>
+    <div className="space-y-3">
+      {(showAllAppointments ? pastAppointments : pastAppointments.slice(0, 2)).map((apt) => (
+        <div
+          key={apt.id}
+          className="p-4 border rounded-lg flex justify-between items-center hover:bg-[hsl(var(--accent))]"
         >
-          Imprimer
-        </Button>
-      </div>
-    </div>
-  </Card>
-);
+          <div>
+            <p className="service-title">{apt.service.title}</p>
+            <p className="service-description">
+              {format(apt.start, 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}
+            </p>
+            <p className="service-description">
+              Avec {apt.staff.firstName} {apt.staff.lastName}
+            </p>
+          </div>
+          <div>
+            <span className={`px-3 py-1 rounded-full text-sm ${
+              apt.status === 'cancelled'
+                ? 'bg-[hsl(var(--destructive))]/10 text-[hsl(var(--destructive))]'
+                : 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]'
+            }`}>
+              {apt.status === 'cancelled' ? 'Annulé' : 'Effectué'}
+            </span>
+          </div>
+        </div>
+      ))}
 
-};
+      {pastAppointments.length > 2 && (
+        <button
+          onClick={() => setShowAllAppointments(!showAllAppointments)}
+          className="w-full flex items-center justify-center gap-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] border rounded-lg p-3"
+        >
+          <span>{showAllAppointments ? 'Voir moins' : 'Voir plus'}</span>
+          {showAllAppointments ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </button>
+      )}
+    </div>
+  </div>
+)}
+
+{appointment.status === 'confirmed' && (
+  <p className="text-center text-sm text-[hsl(var(--muted-foreground))]">
+    Un email de confirmation a été envoyé à {appointment.clientEmail}
+  </p>
+)}
+
+<div className="flex justify-center gap-4">
+  {appointment.status === 'confirmed' && (
+    <Link href={`/?id=${businessId}`}>
+      <Button 
+        variant="outline" 
+        className="bg-[hsl(var(--background))] border-[hsl(var(--border))]"
+      >
+        Réserver un autre rendez-vous
+      </Button>
+    </Link>
+  )}
+  <Button
+    onClick={() => window.print()}
+    variant="outline"
+    className="bg-[hsl(var(--background))] border-[hsl(var(--border))]"
+  >
+    Imprimer
+  </Button>
+</div>
+</div>
+      </Card>
+    );
+}
