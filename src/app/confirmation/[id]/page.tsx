@@ -210,74 +210,74 @@ fetchData();
 }, [params.id]);
 
 
-    if (loading) {
-      return (
-        <div className="booking-container min-h-screen flex items-center justify-center">
-          <div className="text-center">Chargement...</div>
-        </div>
-      );
-    }
+if (loading) {
+  return (
+    <div className="booking-container p-4">
+      <div className="loading-state">Chargement...</div>
+    </div>
+  );
+}
 
-    if (error || !appointment) {
-      return (
-        <div className="booking-container min-h-screen flex items-center justify-center">
-          <Card className="w-full max-w-lg p-6">
-            <div className="text-center">
-              <h1 className="text-xl font-semibold text-red-600 mb-2">
-                {error || 'Rendez-vous non trouvé'}
-              </h1>
-              <Link href="/">
-                <Button>Retourner à l'accueil</Button>
-              </Link>
+if (error || !appointment) {
+  return (
+    <div className="booking-container p-4">
+      <Card className="w-full max-w-lg mx-auto p-6">
+        <div className="text-center">
+          <h1 className="text-xl font-semibold text-red-600 mb-2">
+            {error || 'Rendez-vous non trouvé'}
+          </h1>
+          <Link href="/">
+            <Button>Retourner à l'accueil</Button>
+          </Link>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+const isAppointmentCancellable = 
+  appointment.status === 'confirmed' && 
+  isFuture(appointment.start);
+
+return (
+  <div className="booking-container p-4">
+    <Card className="w-full max-w-2xl mx-auto p-8">
+      <div className="text-center mb-8">
+        {appointment.status === 'cancelled' ? (
+          <>
+            <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="w-6 h-6 text-red-600" />
             </div>
-          </Card>
-        </div>
-      );
-    }
-
-    const isAppointmentCancellable = 
-      appointment.status === 'confirmed' && 
-      isFuture(appointment.start);
-
-      return (
-        <div className="booking-container min-h-screen flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl p-6 space-y-6">
-            <div className="text-center">
-              {appointment.status === 'cancelled' ? (
-                <>
-                  <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                    <AlertCircle className="w-6 h-6 text-red-600" />
-                  </div>
-                  <h1 className="text-2xl font-bold text-gray-900">
-                    Rendez-vous annulé
-                  </h1>
-                  <p className="mt-2 mb-6 text-gray-600">
-                    Ce rendez-vous a été annulé
-                  </p>
-                  <Link href={`/?id=${businessId}`} className="block">
-            <Button className="w-fit py-2 text-base text-white bg-black hover:bg-gray-800">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Rendez-vous annulé
+            </h1>
+            <p className="text-gray-600 mb-6">
+              Ce rendez-vous a été annulé
+            </p>
+            <Link href={`/?id=${businessId}`}>
+              <Button className="bg-black text-white hover:bg-gray-800 px-6">
                 Prendre un nouveau rendez-vous ?
-            </Button>
-        </Link>
-                </>
-              ) : (
-                <>
-                  <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                    <Check className="w-6 h-6 text-green-600" />
-                  </div>
-                  <h1 className="text-2xl font-bold text-gray-900">
-                    Réservation confirmée !
-                  </h1>
-                  <p className="mt-2 text-gray-600">
-                    Votre rendez-vous a été enregistré avec succès
-                  </p>
-                </>
-              )}
+              </Button>
+            </Link>
+          </>
+        ) : (
+          <>
+            <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+              <Check className="w-6 h-6 text-green-600" />
             </div>
-            
-            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-  <h2 className="font-medium">Détails de votre rendez-vous :</h2>
-  <div className="space-y-2 text-sm">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Réservation confirmée !
+            </h1>
+            <p className="text-gray-600">
+              Votre rendez-vous a été enregistré avec succès
+            </p>
+          </>
+        )}
+      </div>
+      
+      <div className="bg-gray-50 rounded-lg p-6 mb-8">
+  <h2 className="font-medium text-lg mb-4">Détails de votre rendez-vous :</h2>
+  <div className="space-y-3">
     <p>
       <span className="text-gray-500">Service :</span>{' '}
       <span className="font-medium">{appointment.service.title}</span>
@@ -328,31 +328,31 @@ fetchData();
     </p>
   </div>
 </div>
-           
-            {isAppointmentCancellable && (
-              <div className="flex justify-center">
-                <Button
-                  variant="destructive"
-                  onClick={handleCancelAppointment}
-                  disabled={cancelLoading}
-                >
-                  {cancelLoading ? 'Annulation...' : 'Annuler ce rendez-vous'}
-                </Button>
-              </div>
-            )}
+      
+{isAppointmentCancellable && (
+  <div className="flex justify-center mb-8">
+    <Button
+      variant="outline"
+      onClick={handleCancelAppointment}
+      disabled={cancelLoading}
+      className="px-6 text-red-600 border-red-600 hover:bg-red-50"
+    >
+      {cancelLoading ? 'Annulation...' : 'Annuler ce rendez-vous'}
+    </Button>
+  </div>
+)}
       
       {pastAppointments.length > 0 && (
-  <div className="mt-8">
-    <h2 className="font-medium flex items-center gap-2 mb-4">
+  <div className="mb-8">
+    <h2 className="font-medium flex items-center gap-2 mb-6">
       <Calendar className="w-5 h-5" />
       Historique de vos rendez-vous
     </h2>
     <div className="space-y-4">
-      {/* Afficher soit tous les rendez-vous, soit seulement les 2 plus récents */}
       {(showAllAppointments ? pastAppointments : pastAppointments.slice(0, 2)).map((apt) => (
         <div
           key={apt.id}
-          className="p-3 border rounded-lg flex justify-between items-center hover:bg-gray-50"
+          className="p-4 border rounded-lg flex justify-between items-center hover:bg-gray-50"
         >
           <div>
             <p className="font-medium">{apt.service.title}</p>
@@ -375,60 +375,56 @@ fetchData();
         </div>
       ))}
 
-      {/* Afficher le bouton "Voir plus" uniquement s'il y a plus de 2 rendez-vous */}
       {pastAppointments.length > 2 && (
         <button
-        onClick={() => setShowAllAppointments(!showAllAppointments)}
-        className="w-full mt-4 flex items-center justify-center gap-2 text-gray-500 hover:text-gray-700 text-sm py-2"
-      >
-        <span>{showAllAppointments ? 'Voir moins' : 'Voir plus'}</span>
-        {showAllAppointments ? (
-          <ChevronUp className="w-4 h-4" />
-        ) : (
-          <ChevronDown className="w-4 h-4" />
-        )}
-      </button>
-      
+          onClick={() => setShowAllAppointments(!showAllAppointments)}
+          className="w-full py-3 mt-4 flex items-center justify-center gap-2 text-gray-500 hover:bg-gray-50"
+        >
+          <span>{showAllAppointments ? 'Voir moins' : 'Voir plus'}</span>
+          {showAllAppointments ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </button>
       )}
     </div>
   </div>
 )}
       
-            {appointment.status === 'confirmed' && (
-              <div className="text-center text-sm text-gray-500">
-                <p>Un email de confirmation a été envoyé à {appointment.clientEmail}</p>
-              </div>
-            )}
-      
-            {/* Boutons du bas uniquement pour les rendez-vous confirmés */}
-            {appointment.status === 'confirmed' && (
-            <div className="flex justify-center gap-4">
-                <Link href={`/?id=${businessId}`}>
-                    <Button variant="outline">
-                        Réserver un autre rendez-vous
-                    </Button>
-                </Link>
-                <Button
-                    onClick={() => window.print()}
-                    variant="outline"
-                >
-                    Imprimer
-                </Button>
-            </div>
-        )}
-      
-            {/* Bouton d'impression seul pour les rendez-vous annulés */}
-            {appointment.status === 'cancelled' && (
-              <div className="flex justify-center">
-                <Button
-                  onClick={() => window.print()}
-                  variant="outline"
-                >
-                  Imprimer
-                </Button>
-              </div>
-            )}
-          </Card>
+      {appointment.status === 'confirmed' && (
+        <div className="text-center text-sm text-gray-500 mb-8">
+          <p>Un email de confirmation a été envoyé à {appointment.clientEmail}</p>
         </div>
-      );
+      )}
+      
+      {appointment.status === 'confirmed' ? (
+        <div className="flex justify-center gap-4 mt-8">
+          <Link href={`/?id=${businessId}`}>
+            <Button variant="outline" className="px-6">
+              Réserver un autre rendez-vous
+            </Button>
+          </Link>
+          <Button
+            onClick={() => window.print()}
+            variant="outline"
+            className="px-6"
+          >
+            Imprimer
+          </Button>
+        </div>
+      ) : (
+        <div className="flex justify-center mt-8">
+          <Button
+            onClick={() => window.print()}
+            variant="outline"
+            className="px-6"
+          >
+            Imprimer
+          </Button>
+        </div>
+      )}
+    </Card>
+  </div>
+);
 }
