@@ -214,39 +214,37 @@ export default function ConfirmationPage() {
 
     if (loading) {
       return (
-        <Card className="booking-container w-full max-w-3xl mx-auto">
-          <div className="p-4">
-            <div className="loading-state">Chargement...</div>
-          </div>
+        <Card className="booking-container">
+          <div className="loading-state">Chargement...</div>
         </Card>
       );
     }
 
+
     if (error || !appointment) {
       return (
-        <Card className="booking-container w-full max-w-3xl mx-auto">
-          <div className="p-4">
-            <div className="error-state">
-              <h1 className="text-xl font-semibold text-[hsl(var(--destructive))] mb-2">
-                {error || 'Rendez-vous non trouvé'}
-              </h1>
-              <Link href="/">
-                <Button className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
-                  Retourner à l'accueil
-                </Button>
-              </Link>
-            </div>
+        <Card className="booking-container">
+          <div className="error-state">
+            <h1 className="text-xl font-semibold text-[hsl(var(--destructive))] mb-2">
+              {error || 'Rendez-vous non trouvé'}
+            </h1>
+            <Link href="/">
+              <Button className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
+                Retourner à l'accueil
+              </Button>
+            </Link>
           </div>
         </Card>
       );
     }
+    
 
     const isAppointmentCancellable = 
       appointment.status === 'confirmed' && 
       isFuture(appointment.start);
 
     return (
-      <Card className="booking-container w-full max-w-3xl mx-auto">
+      <Card className="booking-container">
         <div className="p-4 space-y-6">
           <div className="text-center">
             {appointment.status === 'cancelled' ? (
