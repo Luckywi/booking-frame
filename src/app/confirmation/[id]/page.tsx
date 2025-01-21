@@ -50,6 +50,31 @@ export default function ConfirmationPage() {
 
 
 
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data.type === 'recalculateHeight') {
+        calculateHeight();
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [calculateHeight]);
+
+  // Deuxième effet pour le changement de page initial
+  useEffect(() => {
+    window.parent.postMessage({ 
+      type: 'pageChange',
+      step: 4 
+    }, '*');
+    setTimeout(calculateHeight, 0);
+  }, []);
+
+
+  const handleToggleAppointments = () => {
+    setShowAllAppointments(prev => !prev);
+    setTimeout(calculateHeight, 0); // Même logique simple que dans BookingWidget
+  };
 
     const fetchAppointmentHistory = async (clientEmail: string, businessId: string) => {
       try {
@@ -115,29 +140,6 @@ export default function ConfirmationPage() {
   }
 };
 
-
-useEffect(() => {
-  window.parent.postMessage({ 
-    type: 'pageChange',
-    step: 4
-  }, '*');
-  
-  setTimeout(calculateHeight, 0);
-}, []);
-
-// Ajouter cet effet pour surveiller les changements importants
-useEffect(() => {
-  const handleMessage = (event: MessageEvent) => {
-    if (event.data.type === 'recalculateHeight') {
-      calculateHeight();
-    }
-  };
-
-  window.addEventListener('message', handleMessage);
-  setTimeout(calculateHeight, 0);
-
-  return () => window.removeEventListener('message', handleMessage);
-}, [appointment, pastAppointments, showAllAppointments, loading, calculateHeight]);
 
     const handleCancelAppointment = async () => {
         if (!appointment || !isFuture(appointment.start)) return;
