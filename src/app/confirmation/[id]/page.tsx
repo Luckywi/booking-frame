@@ -134,42 +134,54 @@ export default function ConfirmationPage() {
         }
       };
 
+
+      useEffect(() => {
+        // Signaler à la page parent que nous sommes sur la page de confirmation
+        window.parent.postMessage({ 
+          type: 'pageChange',
+          step: 4  // On utilise 4 pour la page de confirmation
+        }, '*');
+      }, []); // Ce useEffect ne s'exécute qu'une fois au chargement
+      
+      // Puis modifions l'effet existant pour le calcul de hauteur
+      useEffect(() => {
+        const recalculateHeights = () => {
+          calculateHeight();
+          // Ajouter plusieurs recalculs avec des délais
+          [100, 300, 500, 800].forEach(delay => {
+            setTimeout(calculateHeight, delay);
+          });
+        };
+      
+        recalculateHeights();
+      
+        // Ajouter un ResizeObserver pour détecter les changements de contenu
+        const observer = new ResizeObserver(() => {
+          recalculateHeights();
+        });
+      
+        const elements = [
+          document.querySelector('.booking-container'),
+          document.querySelector('.space-y-6'),
+          document.querySelector('.bg-gray-50')
+        ].filter(Boolean) as Element[];
+      
+        elements.forEach(element => observer.observe(element));
+
+      
+        return () => observer.disconnect();
+      }, [appointment, pastAppointments, showAllAppointments, loading, calculateHeight]);
+      
+
       const handleToggleAppointments = () => {
         setShowAllAppointments(prev => !prev);
-        // Séquence de recalculs pendant l'animation
-        [0, 100, 200, 300, 400].forEach(delay => {
+        // Forcer un recalcul après le toggle
+        [50, 150, 300, 500].forEach(delay => {
           setTimeout(calculateHeight, delay);
         });
       };
       
-
-// Remplacer les deux useEffect de recalcul par un seul
-useEffect(() => {
-  const recalculateHeights = () => {
-    calculateHeight();
-    const timeouts = [100, 300, 500].map(delay => 
-      setTimeout(calculateHeight, delay)
-    );
-    return () => timeouts.forEach(clearTimeout);
-  };
-
-  // Premier calcul
-  recalculateHeights();
-
-  // Observer les changements
-  const observer = new ResizeObserver(recalculateHeights);
-  const container = document.querySelector('.booking-container');
-  if (container) {
-    observer.observe(container);
-  }
-
-  return () => {
-    observer.disconnect();
-  };
-}, [appointment, pastAppointments, showAllAppointments, loading, error, calculateHeight]);
-     
-    
-    
+      
       useEffect(() => {
         const fetchData = async () => {
             if (!params.id) return;
