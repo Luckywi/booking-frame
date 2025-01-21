@@ -246,4 +246,75 @@
   .service-duration {
     @apply text-sm text-[hsl(var(--muted-foreground))];
   }
+
+
+   /* Styles de confirmation */
+   .confirmation-container {
+    @apply w-full max-w-3xl mx-auto;
+  }
+
+  .confirmation-content {
+    @apply p-6 space-y-6;
+  }
+
+  .confirmation-header {
+    @apply text-center;
+  }
+
+  .confirmation-icon-wrapper {
+    @apply mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4;
+  }
+
+  .confirmation-icon-success {
+    @apply bg-green-100;
+  }
+
+  .confirmation-icon-cancel {
+    @apply bg-red-100;
+  }
+
+  .confirmation-title {
+    @apply text-2xl font-bold text-gray-900;
+  }
+
+  .confirmation-subtitle {
+    @apply mt-2 text-gray-600;
+  }
+
+  .confirmation-details {
+    @apply bg-gray-50 rounded-lg p-4 space-y-3;
+  }
+
+  .confirmation-details-title {
+    @apply font-medium;
+  }
+
+  .confirmation-details-grid {
+    @apply space-y-2 text-sm;
+  }
+
+  .confirmation-details-row {
+    @apply flex justify-between items-start gap-4;
+  }
+
+  .confirmation-details-label {
+    @apply text-gray-500;
+  }
+
+  .confirmation-details-value {
+    @apply font-medium;
+  }
+
+  .confirmation-history {
+    @apply mt-8 space-y-4;
+  }
+
+  .confirmation-history-title {
+    @apply font-medium flex items-center gap-2 mb-4;
+  }
+
+  .confirmation-history-item {
+    @apply p-3 border rounded-lg flex justify-between items-center hover:bg-gray-50;
+  }
+  
 }
