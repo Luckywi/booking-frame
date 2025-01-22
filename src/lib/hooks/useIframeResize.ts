@@ -44,16 +44,20 @@ export const useIframeResize = () => {
       const dateSelector = document.querySelector('.date-selector');
       const clientForm = document.querySelector('.client-form');
       const confirmationContent = document.querySelector('.confirmation-content');
+      const resaContainer = document.querySelector('.resa-container');
+
       
-      if (!container) {
+      if (!container && !resaContainer) {
         return defaultHeight + bottomPadding;
       }
   
       let contentHeight = 0;
   
       // Ajout de la gestion de ConfirmationPage
-      if (confirmationContent && confirmationContent.getClientRects().length > 0) {
-        contentHeight = getTotalHeight(confirmationContent);
+      if (resaContainer && resaContainer.getClientRects().length > 0) {
+        contentHeight = getTotalHeight(resaContainer);
+      } else if (confirmationContent && confirmationContent.getClientRects().length > 0) {
+        contentHeight = getTotalHeight(confirmationContent);      
       } else if (serviceList && serviceList.getClientRects().length > 0) {
         contentHeight = getTotalHeight(serviceList);
       } else if (dateSelector && dateSelector.getClientRects().length > 0) {
@@ -97,7 +101,9 @@ export const useIframeResize = () => {
         '.client-form',
         '.steps-nav',
         '.confirmation-content',
-        '.confirmation-history'  // Ajout de l'observation de l'historique
+        '.confirmation-history',
+        '.resa-container'// Ajout de l'observation de l'historique
+        
       ].map(selector => document.querySelector(selector))
        .filter(Boolean) as Element[];
   

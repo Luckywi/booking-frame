@@ -316,5 +316,9 @@
   .confirmation-history-item {
     @apply p-3 border rounded-lg flex justify-between items-center hover:bg-gray-50;
   }
-  
+
+  .resa-container{
+    @apply p-6 space-y-6 bg-white;
+  }
+
 }

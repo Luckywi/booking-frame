@@ -212,7 +212,7 @@ export default function ConfirmationPage() {
 
   if (loading) {
     return (
-      <div className="booking-container">
+      <div className="resa-container">
         <Card className="confirmation-content">
           <div className="loading-state">Chargement...</div>
         </Card>
@@ -222,7 +222,7 @@ export default function ConfirmationPage() {
 
   if (error || !appointment) {
     return (
-      <div className="booking-container">
+      <div className="resa-container">
         <Card className="confirmation-content">
           <div className="error-state">
             <h1 className="text-xl font-semibold text-red-600 mb-2">
@@ -238,7 +238,7 @@ export default function ConfirmationPage() {
   }
 
   return (
-    <div className="booking-container">
+    <div className="resa-container">
       <Card className="confirmation-content">
         <div className="confirmation-header">
           {appointment.status === 'cancelled' ? (
